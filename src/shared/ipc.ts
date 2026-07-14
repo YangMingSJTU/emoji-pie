@@ -7,6 +7,8 @@ export const IPC_CHANNELS = {
   clipboardWriteImage: 'clipboard:write-image',
   dialogSaveImage: 'dialog:save-image',
   appGetInfo: 'app:get-info',
+  renderSettingsGet: 'render-settings:get',
+  renderSettingsSave: 'render-settings:save',
   runtimeGetSettings: 'runtime:get-settings',
   runtimeSaveSettings: 'runtime:save-settings',
   runtimeDiscover: 'runtime:discover',

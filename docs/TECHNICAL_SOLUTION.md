@@ -3,7 +3,7 @@
 ## 目标与技术栈
 
 EmojiPie 使用 Electron 统一 Windows 与 macOS 桌面体验，React + TypeScript 实现界面，
-Canvas 2D 生成 PNG，Node.js SQLite 保存历史与收藏，electron-vite 负责开发和构建。
+Canvas 2D 生成双版式 PNG，Node.js SQLite 保存历史、收藏与偏好，electron-vite 负责开发和构建。
 AI 能力采用统一的本机运行时管理器，既支持本地模型 HTTP 服务，也支持本机 Agent CLI；
 渲染进程不直接访问模型或启动进程。
 
@@ -40,7 +40,7 @@ flowchart LR
     K --> V
     F --> G["生成参数"]
     V --> G
-    G --> D["Canvas 2D"]
+    G --> D["双版式 Canvas 2D"]
     D --> S[("SQLite")]
 ```
 
@@ -72,6 +72,22 @@ interface AgentRuntimeGenerationResult {
 Canvas 参数生成器直接消费每个 runtime variant 的情绪与文案；追加生成时循环复用该批
 方案。响应会校验情绪枚举、场景枚举、非空文案、文案长度和 9 项数量。本地模型首次
 不合规时按相同 Schema 纠错重试一次，仍失败则由界面回退规则引擎。
+
+## 双版式渲染与数据兼容
+
+渲染设置由 `EmojiRenderSettings` 表示，包含 `layout: 'compact' | 'poster'` 与
+`embedCaption: boolean`。新用户默认使用 `compact + false`，设置经类型化 IPC 保存到
+SQLite `preferences`；浏览器预览使用 `localStorage`。生成批次会捕获设置快照，自动续批
+沿用首批设置，再次创作历史记录时恢复该记录的设置。
+
+- **小黄脸**：先在 `640x640` 透明画布绘制，再高质量缩放为 `256x256` PNG。无字模式下
+  主体约占画布 85%；带字模式将主体缩至约 72%，底部最多绘制两行、14 个可见字符。
+- **表情海报**：保持现有 `640x640` 构图与文字牌。无字模式移除全部画内文字，将主体
+  放大约 18% 并垂直居中。
+- 关闭图片内文字不改变运行时九项协议。caption 继续用于卡片标题、检索、复制和导出文件名。
+
+`emoji_records` 同步保存 `layout` 与 `embed_caption`。启动时通过幂等迁移为旧数据库补列，
+数据库默认值固定为 `poster + true`，因此旧历史、收藏、复制和导出图片不会被重新渲染或改变。
 
 ## 本地模型运行时
 
@@ -130,8 +146,9 @@ Ollama 可执行文件依次从用户绝对路径、`EMOJI_PIE_OLLAMA_PATH`、`P
 ## 验证策略
 
 - Vitest 覆盖规则分析、严格 9 项响应、本地模型目录与 HTTP 协议、结构化输出重试、
-  Claude/Codex 流协议、Windows shim、Codex 兼容重试、偏好存储与生成参数映射。
+  Claude/Codex 流协议、Windows shim、Codex 兼容重试、偏好存储、设置规范化与旧库迁移。
 - TypeScript 与 ESLint 执行静态检查，electron-vite 执行三进程生产构建。
-- Playwright 启动真实 Electron，验证生成、复制、收藏、两类运行时设置和 960/1320 布局。
+- Playwright 启动真实 Electron，验证生成、复制、收藏、双版式像素输出、设置恢复、两类
+  运行时设置和 960/1320 布局。
 - gated 联调分别通过 preload/IPC 调用真实 Ollama 或已登录 CLI。当前 Windows 环境已验证
   Ollama 0.31.2 + `llama3:latest`，以及 Codex 0.113.0 + GPT-5.4 均返回 9 个方案。

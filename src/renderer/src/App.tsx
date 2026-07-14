@@ -11,9 +11,11 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DEFAULT_AGENT_RUNTIME_SETTINGS,
+  DEFAULT_EMOJI_RENDER_SETTINGS,
   type AgentRuntimeSettings,
   type AppInfo,
   type EmojiRecord,
+  type EmojiRenderSettings,
   type EmojiStyle,
   type GenerationMode,
   type TextAnalysis
@@ -50,20 +52,31 @@ function specsToRecords(
   count: number,
   offset: number,
   nonce: number,
+  renderSettings: EmojiRenderSettings,
   overrides?: GenerationOverrides
 ): EmojiRecord[] {
   const createdAt = new Date().toISOString()
   return createGenerationSpecs(prompt, mode, style, count, offset, nonce, overrides).map((spec) => ({
     ...spec,
-    dataUrl: renderEmoji(spec),
+    layout: renderSettings.layout,
+    embedCaption: renderSettings.embedCaption,
+    dataUrl: renderEmoji(spec, renderSettings),
     favorite: false,
     createdAt
   }))
 }
 
-function makeDemos(): EmojiRecord[] {
+function makeDemos(renderSettings: EmojiRenderSettings): EmojiRecord[] {
   return DEMOS.flatMap((demo, index) =>
-    specsToRecords(demo.prompt, demo.mode, demo.style, 1, index, 10_000 + index)
+    specsToRecords(
+      demo.prompt,
+      demo.mode,
+      demo.style,
+      1,
+      index,
+      10_000 + index,
+      renderSettings
+    )
   )
 }
 
@@ -74,7 +87,6 @@ export default function App(): React.JSX.Element {
   const [style, setStyle] = useState<EmojiStyle>('classic')
   const [results, setResults] = useState<EmojiRecord[]>([])
   const [library, setLibrary] = useState<EmojiRecord[]>([])
-  const [demos, setDemos] = useState<EmojiRecord[]>([])
   const [analysis, setAnalysis] = useState<TextAnalysis | null>(null)
   const [activePrompt, setActivePrompt] = useState('')
   const [generating, setGenerating] = useState(false)
@@ -84,6 +96,9 @@ export default function App(): React.JSX.Element {
   const [agentRuntimeSettings, setAgentRuntimeSettings] = useState<AgentRuntimeSettings>(
     DEFAULT_AGENT_RUNTIME_SETTINGS
   )
+  const [renderSettings, setRenderSettings] = useState<EmojiRenderSettings>(
+    DEFAULT_EMOJI_RENDER_SETTINGS
+  )
   const [analysisSource, setAnalysisSource] = useState('本地规则')
   const [toast, setToast] = useState<ToastState | null>(null)
   const mainRef = useRef<HTMLElement>(null)
@@ -91,33 +106,44 @@ export default function App(): React.JSX.Element {
   const busyRef = useRef(false)
   const autoLoadedLengthRef = useRef(0)
   const generationOverridesRef = useRef<GenerationOverrides | undefined>(undefined)
+  const activeRenderSettingsRef = useRef<EmojiRenderSettings>(DEFAULT_EMOJI_RENDER_SETTINGS)
 
   const showToast = useCallback((message: string, kind: ToastKind = 'success') => {
     setToast({ id: Date.now(), message, kind })
   }, [])
+
+  const updateRenderSettings = useCallback((settings: EmojiRenderSettings): void => {
+    setRenderSettings(settings)
+    void desktopApi.renderSettings.save(settings).catch(() => {
+      showToast('画面设置保存失败', 'error')
+    })
+  }, [showToast])
 
   useEffect(() => {
     let active = true
     void Promise.all([
       desktopApi.library.list(),
       desktopApi.app.getInfo(),
+      desktopApi.renderSettings.get(),
       desktopApi.runtime.getSettings()
     ])
-      .then(([records, info, runtimeSettings]) => {
+      .then(([records, info, savedRenderSettings, runtimeSettings]) => {
         if (!active) return
         setLibrary(records)
         setAppInfo(info)
+        setRenderSettings(savedRenderSettings)
         setAgentRuntimeSettings(runtimeSettings)
       })
       .catch(() => showToast('本地资料库读取失败', 'error'))
       .finally(() => {
         if (active) setLibraryLoading(false)
       })
-    setDemos(makeDemos())
     return () => {
       active = false
     }
   }, [showToast])
+
+  const demos = useMemo(() => makeDemos(renderSettings), [renderSettings])
 
   useEffect(() => {
     if (!toast) return
@@ -166,6 +192,10 @@ export default function App(): React.JSX.Element {
         overrides = { ...overrides, analysis: nextAnalysis }
         if (!append) generationOverridesRef.current = overrides
 
+        const batchRenderSettings = append
+          ? activeRenderSettingsRef.current
+          : { ...renderSettings }
+        if (!append) activeRenderSettingsRef.current = batchRenderSettings
         const count = append ? 6 : 9
         const offset = append ? results.length : 0
         const records = specsToRecords(
@@ -175,6 +205,7 @@ export default function App(): React.JSX.Element {
           count,
           offset,
           Date.now() + offset,
+          batchRenderSettings,
           overrides
         )
         await desktopApi.library.save(records)
@@ -200,7 +231,17 @@ export default function App(): React.JSX.Element {
         setGenerating(false)
       }
     },
-    [activePrompt, agentRuntimeSettings, analysisSource, mode, prompt, results.length, showToast, style]
+    [
+      activePrompt,
+      agentRuntimeSettings,
+      analysisSource,
+      mode,
+      prompt,
+      renderSettings,
+      results.length,
+      showToast,
+      style
+    ]
   )
 
   useEffect(() => {
@@ -287,9 +328,10 @@ export default function App(): React.JSX.Element {
     setPrompt(record.prompt)
     setMode(record.mode)
     setStyle(record.style)
+    updateRenderSettings({ layout: record.layout, embedCaption: record.embedCaption })
     setPage('create')
     window.setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 0)
-  }, [])
+  }, [updateRenderSettings])
 
   const handleClearHistory = useCallback(async () => {
     try {
@@ -367,10 +409,12 @@ export default function App(): React.JSX.Element {
               prompt={prompt}
               mode={mode}
               style={style}
+              renderSettings={renderSettings}
               generating={generating}
               onPromptChange={setPrompt}
               onModeChange={setMode}
               onStyleChange={setStyle}
+              onRenderSettingsChange={updateRenderSettings}
               onGenerate={() => void generate(false)}
               onRandomPrompt={randomPrompt}
             />

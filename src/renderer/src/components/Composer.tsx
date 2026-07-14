@@ -1,15 +1,26 @@
-import { Dice5, LoaderCircle, MessageCircle, Reply, Sparkles } from 'lucide-react'
-import type { EmojiStyle, GenerationMode } from '../../../shared/types'
+import {
+  Dice5,
+  Image as ImageIcon,
+  LoaderCircle,
+  MessageCircle,
+  Reply,
+  Smile,
+  Sparkles,
+  Type
+} from 'lucide-react'
+import type { EmojiRenderSettings, EmojiStyle, GenerationMode } from '../../../shared/types'
 import { PROMPT_SUGGESTIONS, STYLE_OPTIONS } from '../config'
 
 interface ComposerProps {
   prompt: string
   mode: GenerationMode
   style: EmojiStyle
+  renderSettings: EmojiRenderSettings
   generating: boolean
   onPromptChange: (value: string) => void
   onModeChange: (mode: GenerationMode) => void
   onStyleChange: (style: EmojiStyle) => void
+  onRenderSettingsChange: (settings: EmojiRenderSettings) => void
   onGenerate: () => void
   onRandomPrompt: () => void
 }
@@ -18,10 +29,12 @@ export function Composer({
   prompt,
   mode,
   style,
+  renderSettings,
   generating,
   onPromptChange,
   onModeChange,
   onStyleChange,
+  onRenderSettingsChange,
   onGenerate,
   onRandomPrompt
 }: ComposerProps): React.JSX.Element {
@@ -85,6 +98,51 @@ export function Composer({
             {suggestion}
           </button>
         ))}
+      </div>
+
+      <div className="render-options">
+        <div className="render-layout-field">
+          <span>画面版式</span>
+          <div className="render-layout-control" role="radiogroup" aria-label="画面版式">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={renderSettings.layout === 'compact'}
+              className={renderSettings.layout === 'compact' ? 'is-active' : ''}
+              onClick={() => onRenderSettingsChange({ ...renderSettings, layout: 'compact' })}
+            >
+              <Smile size={15} />
+              小黄脸
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={renderSettings.layout === 'poster'}
+              className={renderSettings.layout === 'poster' ? 'is-active' : ''}
+              onClick={() => onRenderSettingsChange({ ...renderSettings, layout: 'poster' })}
+            >
+              <ImageIcon size={15} />
+              表情海报
+            </button>
+          </div>
+        </div>
+
+        <label className="caption-render-switch">
+          <span>
+            <Type size={15} />
+            图片内文字
+          </span>
+          <input
+            type="checkbox"
+            checked={renderSettings.embedCaption}
+            onChange={(event) => onRenderSettingsChange({
+              ...renderSettings,
+              embedCaption: event.target.checked
+            })}
+            aria-label="图片内文字"
+          />
+          <i aria-hidden="true" />
+        </label>
       </div>
 
       <div className="composer-footer">

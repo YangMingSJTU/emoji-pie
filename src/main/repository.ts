@@ -6,6 +6,8 @@ interface StoredEmojiRow {
   prompt: string
   mode: EmojiRecord['mode']
   style: EmojiRecord['style']
+  layout: string
+  embed_caption: number
   emotion: EmojiRecord['emotion']
   caption: string
   seed: number
@@ -35,6 +37,8 @@ function mapRow(row: StoredEmojiRow): EmojiRecord {
     prompt: row.prompt,
     mode: row.mode,
     style: row.style,
+    layout: row.layout === 'compact' ? 'compact' : 'poster',
+    embedCaption: row.embed_caption === 1,
     emotion: row.emotion,
     caption: row.caption,
     seed: row.seed,
@@ -57,6 +61,8 @@ export class EmojiRepository {
         prompt TEXT NOT NULL,
         mode TEXT NOT NULL,
         style TEXT NOT NULL,
+        layout TEXT NOT NULL DEFAULT 'poster',
+        embed_caption INTEGER NOT NULL DEFAULT 1,
         emotion TEXT NOT NULL,
         caption TEXT NOT NULL,
         seed INTEGER NOT NULL,
@@ -74,6 +80,16 @@ export class EmojiRepository {
         updated_at TEXT NOT NULL
       );
     `)
+    const columns = this.database
+      .prepare('PRAGMA table_info(generations)')
+      .all() as unknown as Array<{ name: string }>
+    const columnNames = new Set(columns.map(({ name }) => name))
+    if (!columnNames.has('layout')) {
+      this.database.exec("ALTER TABLE generations ADD COLUMN layout TEXT NOT NULL DEFAULT 'poster'")
+    }
+    if (!columnNames.has('embed_caption')) {
+      this.database.exec('ALTER TABLE generations ADD COLUMN embed_caption INTEGER NOT NULL DEFAULT 1')
+    }
   }
 
   list(filter: LibraryFilter = 'all'): EmojiRecord[] {
@@ -88,12 +104,15 @@ export class EmojiRepository {
   save(records: EmojiRecord[]): void {
     const statement = this.database.prepare(`
       INSERT INTO generations (
-        id, prompt, mode, style, emotion, caption, seed, image, favorite, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, prompt, mode, style, layout, embed_caption, emotion, caption,
+        seed, image, favorite, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         prompt = excluded.prompt,
         mode = excluded.mode,
         style = excluded.style,
+        layout = excluded.layout,
+        embed_caption = excluded.embed_caption,
         emotion = excluded.emotion,
         caption = excluded.caption,
         seed = excluded.seed,
@@ -110,6 +129,8 @@ export class EmojiRepository {
           record.prompt,
           record.mode,
           record.style,
+          record.layout,
+          record.embedCaption ? 1 : 0,
           record.emotion,
           record.caption,
           record.seed,

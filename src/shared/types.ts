@@ -2,6 +2,28 @@ export type GenerationMode = 'express' | 'reply'
 
 export type EmojiStyle = 'classic' | 'cute' | 'office' | 'chaos'
 
+export type EmojiLayout = 'compact' | 'poster'
+
+export interface EmojiRenderSettings {
+  layout: EmojiLayout
+  embedCaption: boolean
+}
+
+export const DEFAULT_EMOJI_RENDER_SETTINGS: EmojiRenderSettings = {
+  layout: 'compact',
+  embedCaption: false
+}
+
+export function normalizeEmojiRenderSettings(value: unknown): EmojiRenderSettings {
+  const candidate = value && typeof value === 'object'
+    ? value as Partial<EmojiRenderSettings>
+    : {}
+  return {
+    layout: candidate.layout === 'poster' ? 'poster' : 'compact',
+    embedCaption: candidate.embedCaption === true
+  }
+}
+
 export type EmotionId =
   | 'happy'
   | 'sad'
@@ -29,6 +51,8 @@ export interface EmojiRecord {
   prompt: string
   mode: GenerationMode
   style: EmojiStyle
+  layout: EmojiLayout
+  embedCaption: boolean
   emotion: EmotionId
   caption: string
   seed: number
@@ -142,6 +166,10 @@ export interface DesktopApi {
   }
   app: {
     getInfo: () => Promise<AppInfo>
+  }
+  renderSettings: {
+    get: () => Promise<EmojiRenderSettings>
+    save: (settings: EmojiRenderSettings) => Promise<EmojiRenderSettings>
   }
   runtime: {
     getSettings: () => Promise<AgentRuntimeSettings>

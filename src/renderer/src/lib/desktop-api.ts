@@ -1,6 +1,8 @@
 import {
   DEFAULT_AGENT_RUNTIME_SETTINGS,
+  DEFAULT_EMOJI_RENDER_SETTINGS,
   DEFAULT_RUNTIME_ENDPOINTS,
+  normalizeEmojiRenderSettings,
   type AgentRuntimeId,
   type AgentRuntimeSettings,
   type DesktopApi,
@@ -10,6 +12,7 @@ import {
 
 const STORAGE_KEY = 'emoji-pie-browser-library-v1'
 const SETTINGS_STORAGE_KEY = 'emoji-pie-browser-agent-runtime-v2'
+const RENDER_SETTINGS_STORAGE_KEY = 'emoji-pie-browser-render-settings-v1'
 
 const BROWSER_RUNTIME_IDS = new Set<AgentRuntimeId>([
   'ollama',
@@ -23,9 +26,25 @@ const BROWSER_RUNTIME_IDS = new Set<AgentRuntimeId>([
 function readLibrary(): EmojiRecord[] {
   try {
     const value = localStorage.getItem(STORAGE_KEY)
-    return value ? (JSON.parse(value) as EmojiRecord[]) : []
+    if (!value) return []
+    return (JSON.parse(value) as Array<Partial<EmojiRecord>>).map((record) => ({
+      ...record,
+      layout: record.layout === 'compact' ? 'compact' : 'poster',
+      embedCaption: typeof record.embedCaption === 'boolean' ? record.embedCaption : true
+    })) as EmojiRecord[]
   } catch {
     return []
+  }
+}
+
+function readEmojiRenderSettings() {
+  try {
+    const value = localStorage.getItem(RENDER_SETTINGS_STORAGE_KEY)
+    return value
+      ? normalizeEmojiRenderSettings(JSON.parse(value))
+      : { ...DEFAULT_EMOJI_RENDER_SETTINGS }
+  } catch {
+    return { ...DEFAULT_EMOJI_RENDER_SETTINGS }
   }
 }
 
@@ -107,6 +126,16 @@ const browserApi: DesktopApi = {
   app: {
     async getInfo() {
       return { version: '0.1.0-web', platform: 'web' }
+    }
+  },
+  renderSettings: {
+    async get() {
+      return readEmojiRenderSettings()
+    },
+    async save(settings) {
+      const normalized = normalizeEmojiRenderSettings(settings)
+      localStorage.setItem(RENDER_SETTINGS_STORAGE_KEY, JSON.stringify(normalized))
+      return normalized
     }
   },
   runtime: {

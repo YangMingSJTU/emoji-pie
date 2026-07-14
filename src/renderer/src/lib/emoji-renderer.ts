@@ -1,4 +1,9 @@
-import type { EmojiStyle, EmotionId } from '../../../shared/types'
+import {
+  DEFAULT_EMOJI_RENDER_SETTINGS,
+  type EmojiRenderSettings,
+  type EmojiStyle,
+  type EmotionId
+} from '../../../shared/types'
 import type { EmojiSpec } from './text-analysis'
 
 interface Palette {
@@ -332,7 +337,8 @@ function drawStyleDetails(
   palette: Palette,
   centerX: number,
   centerY: number,
-  random: Random
+  random: Random,
+  embedCaption = true
 ): void {
   if (style === 'cute') {
     context.globalAlpha = 0.55
@@ -365,10 +371,12 @@ function drawStyleDetails(
     roundedRect(context, centerX - 96, centerY + 158, 192, 41, 5)
     context.fillStyle = '#d9e8ef'
     context.fill()
-    context.fillStyle = palette.ink
-    context.font = '700 19px "Microsoft YaHei", sans-serif'
-    context.textAlign = 'center'
-    context.fillText('今天也要努力工作', centerX, centerY + 186)
+    if (embedCaption) {
+      context.fillStyle = palette.ink
+      context.font = '700 19px "Microsoft YaHei", sans-serif'
+      context.textAlign = 'center'
+      context.fillText('今天也要努力工作', centerX, centerY + 186)
+    }
   }
 
   if (style === 'chaos') {
@@ -378,6 +386,56 @@ function drawStyleDetails(
       const angle = (Math.PI * 2 * index) / 8 + random.between(-0.12, 0.12)
       const inner = 188
       const outer = 223 + random.between(-8, 12)
+      line(
+        context,
+        [
+          [centerX + Math.cos(angle) * inner, centerY + Math.sin(angle) * inner],
+          [centerX + Math.cos(angle) * outer, centerY + Math.sin(angle) * outer]
+        ],
+        palette.accent,
+        9
+      )
+    }
+  }
+}
+
+function drawCompactStyleDetails(
+  context: CanvasRenderingContext2D,
+  style: EmojiStyle,
+  palette: Palette,
+  centerX: number,
+  centerY: number,
+  random: Random
+): void {
+  if (style === 'cute') {
+    context.save()
+    context.globalAlpha = 0.58
+    context.fillStyle = '#ef7190'
+    context.beginPath()
+    context.ellipse(centerX - 112, centerY + 43, 28, 15, -0.2, 0, Math.PI * 2)
+    context.ellipse(centerX + 112, centerY + 43, 28, 15, 0.2, 0, Math.PI * 2)
+    context.fill()
+    context.restore()
+  }
+
+  if (style === 'office') {
+    context.save()
+    context.globalAlpha = 0.2
+    context.fillStyle = '#587e9c'
+    context.beginPath()
+    context.ellipse(centerX - 63, centerY + 2, 38, 15, 0.08, 0, Math.PI * 2)
+    context.ellipse(centerX + 63, centerY + 2, 38, 15, -0.08, 0, Math.PI * 2)
+    context.fill()
+    context.restore()
+  }
+
+  if (style === 'chaos') {
+    context.strokeStyle = palette.accent
+    context.lineWidth = 9
+    for (let index = 0; index < 8; index += 1) {
+      const angle = (Math.PI * 2 * index) / 8 + random.between(-0.1, 0.1)
+      const inner = 182
+      const outer = 204 + random.between(-5, 7)
       line(
         context,
         [
@@ -440,7 +498,73 @@ function drawCaption(
   lines.forEach((value, index) => context.fillText(value, 320, startY + index * lineHeight))
 }
 
-export function renderEmoji(spec: EmojiSpec): string {
+function drawFaceArtwork(
+  context: CanvasRenderingContext2D,
+  spec: EmojiSpec,
+  palette: Palette,
+  random: Random,
+  compact = false,
+  embedCaption = true
+): void {
+  const face = drawFaceBase(context, palette, spec.style, random)
+  if (compact) {
+    drawCompactStyleDetails(context, spec.style, palette, face.centerX, face.centerY, random)
+  } else {
+    drawStyleDetails(
+      context,
+      spec.style,
+      palette,
+      face.centerX,
+      face.centerY,
+      random,
+      embedCaption
+    )
+  }
+  drawExpression(context, spec.emotion, palette, face.centerX, face.centerY, random)
+}
+
+function truncateCaption(value: string, maximumLength: number): string {
+  const characters = [...value.trim()]
+  return characters.length > maximumLength
+    ? `${characters.slice(0, maximumLength - 1).join('')}…`
+    : characters.join('')
+}
+
+function drawCompactCaption(
+  context: CanvasRenderingContext2D,
+  caption: string,
+  palette: Palette
+): void {
+  const value = truncateCaption(caption, 14)
+  if (!value) return
+  let fontSize = value.length > 10 ? 21 : value.length > 6 ? 24 : 28
+  context.font = `900 ${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`
+  let lines = splitCaption(context, value, 224)
+  while (lines.length > 2 && fontSize > 18) {
+    fontSize -= 1
+    context.font = `900 ${fontSize}px "Microsoft YaHei", "PingFang SC", sans-serif`
+    lines = splitCaption(context, value, 224)
+  }
+  lines = lines.slice(0, 2)
+  const lineHeight = fontSize * 1.08
+  const startY = 225 - ((lines.length - 1) * lineHeight) / 2
+  context.save()
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+  context.lineJoin = 'round'
+  context.miterLimit = 2
+  context.strokeStyle = '#fffdf8'
+  context.lineWidth = 6
+  context.fillStyle = palette.ink
+  lines.forEach((lineValue, index) => {
+    const y = startY + index * lineHeight
+    context.strokeText(lineValue, 128, y, 232)
+    context.fillText(lineValue, 128, y, 232)
+  })
+  context.restore()
+}
+
+function renderPosterEmoji(spec: EmojiSpec, embedCaption: boolean): string {
   const canvas = document.createElement('canvas')
   canvas.width = 640
   canvas.height = 640
@@ -450,10 +574,52 @@ export function renderEmoji(spec: EmojiSpec): string {
   const palette = PALETTES[spec.style]
   const random = new Random(spec.seed)
   drawBackground(context, palette, spec.style, random)
-  const face = drawFaceBase(context, palette, spec.style, random)
-  drawStyleDetails(context, spec.style, palette, face.centerX, face.centerY, random)
-  drawExpression(context, spec.emotion, palette, face.centerX, face.centerY, random)
-  drawCaption(context, spec.caption, palette, spec.style)
+  if (embedCaption) {
+    drawFaceArtwork(context, spec, palette, random)
+    drawCaption(context, spec.caption, palette, spec.style)
+  } else {
+    context.save()
+    context.translate(320, 320)
+    context.scale(1.18, 1.18)
+    context.translate(-320, -270)
+    drawFaceArtwork(context, spec, palette, random, false, false)
+    context.restore()
+  }
 
   return canvas.toDataURL('image/png')
+}
+
+function renderCompactEmoji(spec: EmojiSpec, embedCaption: boolean): string {
+  const sourceCanvas = document.createElement('canvas')
+  sourceCanvas.width = 640
+  sourceCanvas.height = 640
+  const sourceContext = sourceCanvas.getContext('2d')
+  if (!sourceContext) throw new Error('当前环境不支持 Canvas 2D')
+
+  const palette = PALETTES[spec.style]
+  drawFaceArtwork(sourceContext, spec, palette, new Random(spec.seed), true)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('当前环境不支持 Canvas 2D')
+  context.imageSmoothingEnabled = true
+  context.imageSmoothingQuality = 'high'
+  if (embedCaption) {
+    context.drawImage(sourceCanvas, 95, 45, 450, 450, 32, 2, 192, 192)
+    drawCompactCaption(context, spec.caption, palette)
+  } else {
+    context.drawImage(sourceCanvas, 95, 45, 450, 450, 8, 8, 240, 240)
+  }
+  return canvas.toDataURL('image/png')
+}
+
+export function renderEmoji(
+  spec: EmojiSpec,
+  settings: EmojiRenderSettings = DEFAULT_EMOJI_RENDER_SETTINGS
+): string {
+  return settings.layout === 'poster'
+    ? renderPosterEmoji(spec, settings.embedCaption)
+    : renderCompactEmoji(spec, settings.embedCaption)
 }

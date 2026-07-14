@@ -28,8 +28,12 @@ export function EmojiGrid({
   onDelete,
   onReuse
 }: EmojiGridProps): React.JSX.Element {
+  const usesCompactLayout = records.length > 0 && records.every(({ layout }) => layout === 'compact')
   return (
-    <div className={`emoji-grid ${compact ? 'is-compact' : ''}`} aria-live="polite">
+    <div
+      className={`emoji-grid ${compact ? 'is-compact' : ''} ${usesCompactLayout ? 'has-compact-layout' : ''}`}
+      aria-live="polite"
+    >
       {records.map((record) => (
         <EmojiCard
           key={record.id}

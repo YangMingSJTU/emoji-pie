@@ -21,6 +21,10 @@ const api: DesktopApi = {
   app: {
     getInfo: () => ipcRenderer.invoke(IPC_CHANNELS.appGetInfo)
   },
+  renderSettings: {
+    get: () => ipcRenderer.invoke(IPC_CHANNELS.renderSettingsGet),
+    save: (settings) => ipcRenderer.invoke(IPC_CHANNELS.renderSettingsSave, settings)
+  },
   runtime: {
     getSettings: () => ipcRenderer.invoke(IPC_CHANNELS.runtimeGetSettings),
     saveSettings: (settings) =>

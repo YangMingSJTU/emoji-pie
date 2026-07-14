@@ -505,6 +505,136 @@ h1 {
   border-color: var(--border-strong);
 }
 
+.render-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 50px;
+  margin-top: 14px;
+  padding-top: 13px;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.render-layout-field {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.render-layout-field > span {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.render-layout-control {
+  display: flex;
+  min-width: 0;
+  padding: 3px;
+  gap: 2px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.render-layout-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  gap: 6px;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 11px;
+  font-weight: 680;
+  white-space: nowrap;
+}
+
+.render-layout-control button:hover {
+  color: var(--ink);
+}
+
+.render-layout-control button.is-active {
+  color: var(--ink);
+  background: var(--surface);
+  border-color: rgba(203, 196, 181, 0.7);
+  box-shadow: 0 2px 7px rgba(59, 52, 37, 0.07);
+}
+
+.caption-render-switch {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 8px 0 10px;
+  gap: 12px;
+  color: var(--ink-muted);
+  background: #faf8f2;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.caption-render-switch > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 680;
+  white-space: nowrap;
+}
+
+.caption-render-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.caption-render-switch > i {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  flex: 0 0 34px;
+  background: #d8d4ca;
+  border: 1px solid var(--border-strong);
+  border-radius: 11px;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.caption-render-switch > i::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  background: var(--surface);
+  border: 1px solid rgba(40, 39, 34, 0.16);
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(40, 39, 34, 0.16);
+  transition: transform 150ms ease;
+}
+
+.caption-render-switch input:checked + i {
+  background: var(--mint);
+  border-color: #4a8c6d;
+}
+
+.caption-render-switch input:checked + i::after {
+  transform: translateX(14px);
+}
+
+.caption-render-switch input:focus-visible + i {
+  outline: 3px solid rgba(88, 126, 156, 0.27);
+  outline-offset: 2px;
+}
+
 .composer-footer {
   align-items: flex-end;
   margin-top: 18px;
@@ -682,6 +812,10 @@ h1 {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.emoji-grid.has-compact-layout:not(.is-compact) {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
 .emoji-card {
   position: relative;
   min-width: 0;
@@ -716,6 +850,19 @@ h1 {
   height: 100%;
   object-fit: cover;
   transition: transform 220ms ease;
+}
+
+.emoji-card.layout-compact .emoji-preview-button {
+  background: #f1eee6;
+}
+
+.emoji-card.layout-compact .emoji-preview-button img {
+  object-fit: contain;
+  padding: 20px;
+}
+
+.emoji-card.layout-compact:hover .emoji-preview-button img {
+  transform: scale(1.035);
 }
 
 .emoji-card:hover .emoji-preview-button img {
@@ -1553,6 +1700,10 @@ h1 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .emoji-grid.has-compact-layout:not(.is-compact) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .style-options button span {
     display: none;
   }
@@ -1561,6 +1712,25 @@ h1 {
     width: 34px;
     justify-content: center;
     padding: 0;
+  }
+
+  .render-options {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .render-layout-field,
+  .caption-render-switch {
+    justify-content: space-between;
+  }
+
+  .render-layout-control {
+    flex: 1;
+  }
+
+  .render-layout-control button {
+    flex: 1;
   }
 
   .runtime-header {

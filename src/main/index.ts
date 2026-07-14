@@ -6,13 +6,16 @@ import type {
   AgentRuntimeGenerateRequest,
   AgentRuntimeSettings,
   EmojiRecord,
+  EmojiRenderSettings,
   LibraryFilter
 } from '../shared/types'
+import { normalizeEmojiRenderSettings } from '../shared/types'
 import { AgentRuntimeManager, normalizeAgentRuntimeSettings } from './agent-runtime'
 import { EmojiRepository } from './repository'
 
 const MAX_SAVE_BATCH = 24
 const AGENT_RUNTIME_SETTINGS_KEY = 'agent-runtime-settings-v2'
+const EMOJI_RENDER_SETTINGS_KEY = 'emoji-render-settings-v1'
 let mainWindow: BrowserWindow | null = null
 let repository: EmojiRepository | null = null
 let agentRuntime: AgentRuntimeManager | null = null
@@ -30,6 +33,8 @@ function isEmojiRecord(record: unknown): record is EmojiRecord {
     typeof candidate.prompt === 'string' &&
     candidate.prompt.length <= 500 &&
     typeof candidate.caption === 'string' &&
+    (candidate.layout === 'compact' || candidate.layout === 'poster') &&
+    typeof candidate.embedCaption === 'boolean' &&
     typeof candidate.dataUrl === 'string' &&
     typeof candidate.seed === 'number' &&
     typeof candidate.createdAt === 'string'
@@ -49,6 +54,12 @@ function requireAgentRuntime(): AgentRuntimeManager {
 function getAgentRuntimeSettings(): AgentRuntimeSettings {
   return normalizeAgentRuntimeSettings(
     requireRepository().getPreference<AgentRuntimeSettings>(AGENT_RUNTIME_SETTINGS_KEY)
+  )
+}
+
+function getEmojiRenderSettings(): EmojiRenderSettings {
+  return normalizeEmojiRenderSettings(
+    requireRepository().getPreference<EmojiRenderSettings>(EMOJI_RENDER_SETTINGS_KEY)
   )
 }
 
@@ -129,6 +140,14 @@ function registerIpcHandlers(): void {
     version: app.getVersion(),
     platform: process.platform
   }))
+
+  ipcMain.handle(IPC_CHANNELS.renderSettingsGet, () => getEmojiRenderSettings())
+
+  ipcMain.handle(IPC_CHANNELS.renderSettingsSave, (_event, value: unknown) => {
+    const settings = normalizeEmojiRenderSettings(value)
+    requireRepository().setPreference(EMOJI_RENDER_SETTINGS_KEY, settings)
+    return settings
+  })
 
   ipcMain.handle(IPC_CHANNELS.runtimeGetSettings, () => getAgentRuntimeSettings())
 

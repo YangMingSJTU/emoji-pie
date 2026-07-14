@@ -28,7 +28,11 @@ export function EmojiCard({
   onReuse
 }: EmojiCardProps): React.JSX.Element {
   return (
-    <article className={`emoji-card ${compact ? 'is-compact' : ''}`} data-testid="emoji-card">
+    <article
+      className={`emoji-card layout-${record.layout} ${compact ? 'is-compact' : ''}`}
+      data-layout={record.layout}
+      data-testid="emoji-card"
+    >
       <button
         type="button"
         className="emoji-preview-button"
