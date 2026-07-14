@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type {
   EmojiRenderSettings,
   EmojiStyle,
@@ -37,42 +37,102 @@ export function EffectPicker({
   renderSettings,
   onChange
 }: EffectPickerProps): React.JSX.Element {
+  const [previewValue, setPreviewValue] = useState<EmojiStyleSelection | null>(null)
   const previews = useMemo(
     () => new Map(
       PREVIEW_STYLES.map((style) => [style, renderPreview(style, renderSettings)])
     ),
     [renderSettings]
   )
+  const visibleValue = previewValue ?? value
+  const visibleOption = STYLE_OPTIONS.find((option) => option.id === visibleValue)
+    ?? STYLE_OPTIONS[0]
+
+  const previewAdjacentOption = (
+    event: React.KeyboardEvent<HTMLButtonElement>,
+    offset: number
+  ): void => {
+    const buttons = Array.from(
+      event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('.effect-option') ?? []
+    )
+    const currentIndex = buttons.indexOf(event.currentTarget)
+    const nextButton = buttons[(currentIndex + offset + buttons.length) % buttons.length]
+    if (!nextButton) return
+    event.preventDefault()
+    nextButton.focus()
+  }
 
   return (
     <div className="effect-picker">
       <span className="effect-picker-label">表情效果</span>
-      <div className="effect-options" role="radiogroup" aria-label="表情效果">
-        {STYLE_OPTIONS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            role="radio"
-            aria-checked={value === option.id}
-            aria-label={option.label}
-            className={`effect-option ${value === option.id ? 'is-active' : ''}`}
-            data-effect={option.id}
-            title={option.description}
-            onClick={() => onChange(option.id)}
+      <div className="effect-picker-content">
+        <div
+          className="effect-options"
+          role="radiogroup"
+          aria-label="表情效果"
+          onPointerLeave={() => setPreviewValue(null)}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+              setPreviewValue(null)
+            }
+          }}
+        >
+          {STYLE_OPTIONS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={value === option.id}
+              aria-label={option.label}
+              className={`effect-option ${value === option.id ? 'is-active' : ''}`}
+              data-effect={option.id}
+              title={option.description}
+              tabIndex={value === option.id ? 0 : -1}
+              onClick={() => onChange(option.id)}
+              onFocus={() => setPreviewValue(option.id)}
+              onPointerEnter={() => setPreviewValue(option.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowRight') {
+                  previewAdjacentOption(event, 1)
+                } else if (event.key === 'ArrowLeft') {
+                  previewAdjacentOption(event, -1)
+                } else if (event.key === 'ArrowDown') {
+                  previewAdjacentOption(event, 4)
+                } else if (event.key === 'ArrowUp') {
+                  previewAdjacentOption(event, -4)
+                }
+              }}
+            >
+              <span className="effect-option-label">{option.label}</span>
+              {value === option.id && (
+                <span className="effect-selected" aria-hidden="true">
+                  <Check size={11} strokeWidth={3} />
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        <figure
+          className="effect-detail"
+          data-testid="effect-detail-preview"
+          data-preview-effect={visibleOption.id}
+          aria-label={`${visibleOption.label}示例：${visibleOption.description}`}
+        >
+          <div
+            className={`effect-detail-art ${visibleOption.id === 'smart' ? 'is-smart' : ''}`}
+            data-testid="effect-preview-art"
+            aria-hidden="true"
           >
-            <span className={`effect-preview ${option.id === 'smart' ? 'is-smart' : ''}`}>
-              {option.previewStyles.map((style) => (
-                <img key={style} src={previews.get(style)} alt="" draggable={false} />
-              ))}
-            </span>
-            <span className="effect-option-label">{option.label}</span>
-            {value === option.id && (
-              <span className="effect-selected" aria-hidden="true">
-                <Check size={11} strokeWidth={3} />
-              </span>
-            )}
-          </button>
-        ))}
+            {visibleOption.previewStyles.map((style) => (
+              <img key={style} src={previews.get(style)} alt="" draggable={false} />
+            ))}
+          </div>
+          <figcaption>
+            <strong>{visibleOption.label}</strong>
+            <span>{visibleOption.description}</span>
+          </figcaption>
+        </figure>
       </div>
     </div>
   )

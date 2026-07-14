@@ -20,14 +20,28 @@ test('generates, copies and favorites an emoji batch', async () => {
 
     await expect(window.getByRole('heading', { name: '把这句话做成表情' })).toBeVisible()
     const effectGroup = window.getByRole('radiogroup', { name: '表情效果' })
+    const effectPreview = window.getByTestId('effect-detail-preview')
+    const smartEffect = effectGroup.getByRole('radio', { name: '智能搭配' })
+    await smartEffect.hover()
     await expect(effectGroup.getByRole('radio')).toHaveCount(8)
-    await expect(effectGroup.getByRole('radio', { name: '智能搭配' })).toBeChecked()
-    await expect.poll(async () => effectGroup.locator('img').evaluateAll((images) =>
+    await expect(smartEffect).toBeChecked()
+    await expect(effectGroup.locator('img')).toHaveCount(0)
+    await expect(effectPreview).toHaveAttribute('data-preview-effect', 'smart')
+    await expect(effectPreview.locator('img')).toHaveCount(4)
+    await expect.poll(async () => effectPreview.locator('img').evaluateAll((images) =>
       images.every((image) => (image as HTMLImageElement).naturalWidth === 256)
     )).toBe(true)
+    await window.screenshot({ path: testInfo.outputPath('effect-picker-smart.png'), fullPage: true })
+
+    await effectGroup.getByRole('radio', { name: '经典黄脸' }).hover()
+    await expect(effectPreview).toHaveAttribute('data-preview-effect', 'classic')
+    await expect(smartEffect).toBeChecked()
 
     await window.getByLabel('表情文案').fill('今天又要加班')
-    await window.getByRole('radio', { name: '社畜打工' }).click()
+    const officeEffect = effectGroup.getByRole('radio', { name: '社畜打工' })
+    await officeEffect.click()
+    await expect(officeEffect).toBeChecked()
+    await expect(effectPreview).toHaveAttribute('data-preview-effect', 'office')
     await window.getByRole('button', { name: '生成一组' }).click()
 
     await expect(window.getByTestId('emoji-card')).toHaveCount(9)
