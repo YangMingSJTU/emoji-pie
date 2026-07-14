@@ -8,18 +8,23 @@ import {
   Sparkles,
   Type
 } from 'lucide-react'
-import type { EmojiRenderSettings, EmojiStyle, GenerationMode } from '../../../shared/types'
-import { PROMPT_SUGGESTIONS, STYLE_OPTIONS } from '../config'
+import type {
+  EmojiRenderSettings,
+  EmojiStyleSelection,
+  GenerationMode
+} from '../../../shared/types'
+import { PROMPT_SUGGESTIONS } from '../config'
+import { EffectPicker } from './EffectPicker'
 
 interface ComposerProps {
   prompt: string
   mode: GenerationMode
-  style: EmojiStyle
+  style: EmojiStyleSelection
   renderSettings: EmojiRenderSettings
   generating: boolean
   onPromptChange: (value: string) => void
   onModeChange: (mode: GenerationMode) => void
-  onStyleChange: (style: EmojiStyle) => void
+  onStyleChange: (style: EmojiStyleSelection) => void
   onRenderSettingsChange: (settings: EmojiRenderSettings) => void
   onGenerate: () => void
   onRandomPrompt: () => void
@@ -146,22 +151,11 @@ export function Composer({
       </div>
 
       <div className="composer-footer">
-        <div className="style-options" role="radiogroup" aria-label="表情风格">
-          {STYLE_OPTIONS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={style === option.id ? 'is-active' : ''}
-              onClick={() => onStyleChange(option.id)}
-              role="radio"
-              aria-checked={style === option.id}
-              title={option.description}
-            >
-              <i style={{ backgroundColor: option.color }} />
-              <span>{option.label}</span>
-            </button>
-          ))}
-        </div>
+        <EffectPicker
+          value={style}
+          renderSettings={renderSettings}
+          onChange={onStyleChange}
+        />
 
         <button
           type="button"

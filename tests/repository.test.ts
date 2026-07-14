@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { EmojiRepository } from '../src/main/repository'
 import {
   DEFAULT_EMOJI_RENDER_SETTINGS,
+  isEmojiStyle,
   normalizeEmojiRenderSettings,
   type EmojiRecord
 } from '../src/shared/types'
@@ -29,6 +30,12 @@ describe('EmojiRepository preferences', () => {
 })
 
 describe('emoji render settings', () => {
+  it('accepts concrete effects but keeps smart selection out of records', () => {
+    expect(isEmojiStyle('spectator')).toBe(true)
+    expect(isEmojiStyle('smart')).toBe(false)
+    expect(isEmojiStyle('unknown')).toBe(false)
+  })
+
   it('defaults to a compact image without embedded text', () => {
     expect(DEFAULT_EMOJI_RENDER_SETTINGS).toEqual({
       layout: 'compact',
@@ -50,7 +57,7 @@ describe('emoji render settings', () => {
       id: 'compact-1',
       prompt: '收到',
       mode: 'reply',
-      style: 'classic',
+      style: 'spectator',
       layout: 'compact',
       embedCaption: false,
       emotion: 'happy',

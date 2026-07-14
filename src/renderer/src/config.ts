@@ -1,15 +1,63 @@
-import type { EmojiStyle, GenerationMode } from '../../shared/types'
+import type {
+  EmojiStyle,
+  EmojiStyleSelection,
+  GenerationMode
+} from '../../shared/types'
 
 export const STYLE_OPTIONS: Array<{
-  id: EmojiStyle
+  id: EmojiStyleSelection
   label: string
   description: string
-  color: string
+  previewStyles: EmojiStyle[]
 }> = [
-  { id: 'classic', label: '默认黄脸', description: '直接、有梗', color: '#f2c94c' },
-  { id: 'cute', label: '可爱风', description: '软萌、亲和', color: '#ed8da0' },
-  { id: 'office', label: '社畜风', description: '班味十足', color: '#6ea98b' },
-  { id: 'chaos', label: '发疯风', description: '高能、抽象', color: '#e86552' }
+  {
+    id: 'smart',
+    label: '智能搭配',
+    description: '按情绪和场景混合效果',
+    previewStyles: ['classic', 'cute', 'office', 'chaos']
+  },
+  {
+    id: 'classic',
+    label: '经典黄脸',
+    description: '直接、耐看',
+    previewStyles: ['classic']
+  },
+  {
+    id: 'cute',
+    label: '软萌可爱',
+    description: '圆润、亲和',
+    previewStyles: ['cute']
+  },
+  {
+    id: 'deadpan',
+    label: '冷淡敷衍',
+    description: '克制、无语',
+    previewStyles: ['deadpan']
+  },
+  {
+    id: 'office',
+    label: '社畜打工',
+    description: '班味十足',
+    previewStyles: ['office']
+  },
+  {
+    id: 'sarcastic',
+    label: '阴阳怪气',
+    description: '挑眉、反话感',
+    previewStyles: ['sarcastic']
+  },
+  {
+    id: 'spectator',
+    label: '吃瓜围观',
+    description: '看热闹、围观',
+    previewStyles: ['spectator']
+  },
+  {
+    id: 'chaos',
+    label: '破防发疯',
+    description: '高能、抽象',
+    previewStyles: ['chaos']
+  }
 ]
 
 export const PROMPT_SUGGESTIONS: Record<GenerationMode, string[]> = {

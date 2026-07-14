@@ -1,8 +1,8 @@
 import {
-  ArrowDown,
   Heart,
   History,
   Image as ImageIcon,
+  RefreshCw,
   Search,
   Sparkles,
   Trash2,
@@ -17,6 +17,7 @@ import {
   type EmojiRecord,
   type EmojiRenderSettings,
   type EmojiStyle,
+  type EmojiStyleSelection,
   type GenerationMode,
   type TextAnalysis
 } from '../../shared/types'
@@ -41,6 +42,13 @@ const DEMOS: Array<{ prompt: string; mode: GenerationMode; style: EmojiStyle }> 
   { prompt: '这个需求很简单', mode: 'reply', style: 'chaos' }
 ]
 
+interface GenerationSnapshot {
+  prompt: string
+  mode: GenerationMode
+  style: EmojiStyleSelection
+  renderSettings: EmojiRenderSettings
+}
+
 function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
@@ -48,7 +56,7 @@ function wait(milliseconds: number): Promise<void> {
 function specsToRecords(
   prompt: string,
   mode: GenerationMode,
-  style: EmojiStyle,
+  style: EmojiStyleSelection,
   count: number,
   offset: number,
   nonce: number,
@@ -84,7 +92,7 @@ export default function App(): React.JSX.Element {
   const [page, setPage] = useState<PageId>('create')
   const [prompt, setPrompt] = useState('')
   const [mode, setMode] = useState<GenerationMode>('express')
-  const [style, setStyle] = useState<EmojiStyle>('classic')
+  const [style, setStyle] = useState<EmojiStyleSelection>('smart')
   const [results, setResults] = useState<EmojiRecord[]>([])
   const [library, setLibrary] = useState<EmojiRecord[]>([])
   const [analysis, setAnalysis] = useState<TextAnalysis | null>(null)
@@ -102,11 +110,8 @@ export default function App(): React.JSX.Element {
   const [analysisSource, setAnalysisSource] = useState('本地规则')
   const [toast, setToast] = useState<ToastState | null>(null)
   const mainRef = useRef<HTMLElement>(null)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
   const busyRef = useRef(false)
-  const autoLoadedLengthRef = useRef(0)
-  const generationOverridesRef = useRef<GenerationOverrides | undefined>(undefined)
-  const activeRenderSettingsRef = useRef<EmojiRenderSettings>(DEFAULT_EMOJI_RENDER_SETTINGS)
+  const activeBatchRef = useRef<GenerationSnapshot | null>(null)
 
   const showToast = useCallback((message: string, kind: ToastKind = 'success') => {
     setToast({ id: Date.now(), message, kind })
@@ -152,8 +157,14 @@ export default function App(): React.JSX.Element {
   }, [toast])
 
   const generate = useCallback(
-    async (append = false): Promise<void> => {
-      const normalizedPrompt = prompt.trim()
+    async (snapshot?: GenerationSnapshot, refresh = false): Promise<void> => {
+      const request = snapshot ?? {
+        prompt,
+        mode,
+        style,
+        renderSettings: { ...renderSettings }
+      }
+      const normalizedPrompt = request.prompt.trim()
       if (!normalizedPrompt) {
         showToast('先输入一句想做成表情的话', 'info')
         return
@@ -163,17 +174,15 @@ export default function App(): React.JSX.Element {
       busyRef.current = true
       setGenerating(true)
       try {
-        if (append && normalizedPrompt !== activePrompt) return
-
-        let overrides = append ? generationOverridesRef.current : undefined
-        let source = append ? analysisSource : '本地规则'
+        let overrides: GenerationOverrides | undefined
+        let source = '本地规则'
         let usedFallback = false
 
-        if (!append && agentRuntimeSettings.enabled) {
+        if (agentRuntimeSettings.enabled) {
           try {
             const runtimeResult = await desktopApi.runtime.generate({
               prompt: normalizedPrompt,
-              mode
+              mode: request.mode
             })
             overrides = {
               analysis: runtimeResult.analysis,
@@ -185,31 +194,25 @@ export default function App(): React.JSX.Element {
             usedFallback = true
           }
         } else {
-          await wait(append ? 140 : 360)
+          await wait(360)
         }
 
-        const nextAnalysis = overrides?.analysis ?? analyzeText(normalizedPrompt, mode)
+        const nextAnalysis = overrides?.analysis ?? analyzeText(normalizedPrompt, request.mode)
         overrides = { ...overrides, analysis: nextAnalysis }
-        if (!append) generationOverridesRef.current = overrides
-
-        const batchRenderSettings = append
-          ? activeRenderSettingsRef.current
-          : { ...renderSettings }
-        if (!append) activeRenderSettingsRef.current = batchRenderSettings
-        const count = append ? 6 : 9
-        const offset = append ? results.length : 0
+        const batchRenderSettings = { ...request.renderSettings }
+        const count = 9
         const records = specsToRecords(
           normalizedPrompt,
-          mode,
-          style,
+          request.mode,
+          request.style,
           count,
-          offset,
-          Date.now() + offset,
+          0,
+          Date.now(),
           batchRenderSettings,
           overrides
         )
         await desktopApi.library.save(records)
-        setResults((current) => (append ? [...current, ...records] : records))
+        setResults(records)
         setLibrary((current) => {
           const ids = new Set(records.map((record) => record.id))
           return [...records, ...current.filter((record) => !ids.has(record.id))].slice(0, 240)
@@ -217,53 +220,37 @@ export default function App(): React.JSX.Element {
         setAnalysis(nextAnalysis)
         setAnalysisSource(source)
         setActivePrompt(normalizedPrompt)
-        if (!append) {
-          showToast(
-            usedFallback ? 'AI 运行时暂不可用，已使用规则生成' : `已生成 ${count} 张新表情`,
-            usedFallback ? 'info' : 'success'
-          )
+        activeBatchRef.current = {
+          prompt: normalizedPrompt,
+          mode: request.mode,
+          style: request.style,
+          renderSettings: batchRenderSettings
         }
+        showToast(
+          usedFallback
+            ? 'AI 运行时暂不可用，已使用规则生成'
+            : refresh
+              ? '已换一批候选'
+              : `已生成 ${count} 张新表情`,
+          usedFallback ? 'info' : 'success'
+        )
       } catch (error) {
         console.error(error)
-        showToast('生成失败，请再试一次', 'error')
+        showToast(refresh ? '换一批失败，已保留当前候选' : '生成失败，请再试一次', 'error')
       } finally {
         busyRef.current = false
         setGenerating(false)
       }
     },
     [
-      activePrompt,
       agentRuntimeSettings,
-      analysisSource,
       mode,
       prompt,
       renderSettings,
-      results.length,
       showToast,
       style
     ]
   )
-
-  useEffect(() => {
-    const target = loadMoreRef.current
-    if (!target || page !== 'create' || results.length < 9 || generating) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0]?.isIntersecting &&
-          autoLoadedLengthRef.current !== results.length &&
-          !busyRef.current
-        ) {
-          autoLoadedLengthRef.current = results.length
-          void generate(true)
-        }
-      },
-      { root: mainRef.current, rootMargin: '80px 0px' }
-    )
-    observer.observe(target)
-    return () => observer.disconnect()
-  }, [generate, generating, page, results.length])
 
   const updateRecord = useCallback((id: string, changes: Partial<EmojiRecord>) => {
     const update = (records: EmojiRecord[]) =>
@@ -415,7 +402,7 @@ export default function App(): React.JSX.Element {
               onModeChange={setMode}
               onStyleChange={setStyle}
               onRenderSettingsChange={updateRenderSettings}
-              onGenerate={() => void generate(false)}
+              onGenerate={() => void generate()}
               onRandomPrompt={randomPrompt}
             />
 
@@ -435,19 +422,28 @@ export default function App(): React.JSX.Element {
                       )}
                     </div>
                   </div>
-                  <small>{results.length} 张结果</small>
+                  <div className="result-heading-actions">
+                    <small>{results.length} 张候选</small>
+                    <button
+                      type="button"
+                      className="refresh-results-button"
+                      onClick={() => {
+                        const snapshot = activeBatchRef.current
+                        if (snapshot) void generate(snapshot, true)
+                      }}
+                      disabled={generating}
+                    >
+                      <RefreshCw className={generating ? 'spin' : ''} size={15} />
+                      {generating ? '生成中' : '换一批'}
+                    </button>
+                  </div>
                 </div>
                 <EmojiGrid
                   records={results}
-                  loading={generating}
                   onCopy={handleCopy}
                   onDownload={handleDownload}
                   onFavorite={handleFavorite}
                 />
-                <div ref={loadMoreRef} className="load-more-sentinel">
-                  <ArrowDown size={16} />
-                  {generating ? '正在补充更多灵感' : '继续下滑，自动生成更多'}
-                </div>
               </section>
             ) : (
               <section className="inspiration-section" aria-label="灵感样片">

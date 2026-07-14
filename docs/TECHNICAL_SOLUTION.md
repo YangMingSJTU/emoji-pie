@@ -40,7 +40,8 @@ flowchart LR
     K --> V
     F --> G["生成参数"]
     V --> G
-    G --> D["双版式 Canvas 2D"]
+    G --> E["本地效果解析"]
+    E --> D["双版式 Canvas 2D"]
     D --> S[("SQLite")]
 ```
 
@@ -69,16 +70,30 @@ interface AgentRuntimeGenerationResult {
 }
 ```
 
-Canvas 参数生成器直接消费每个 runtime variant 的情绪与文案；追加生成时循环复用该批
-方案。响应会校验情绪枚举、场景枚举、非空文案、文案长度和 9 项数量。本地模型首次
+Canvas 参数生成器直接消费每个 runtime variant 的情绪与文案。响应会校验情绪枚举、
+场景枚举、非空文案、文案长度和 9 项数量。本地模型首次
 不合规时按相同 Schema 纠错重试一次，仍失败则由界面回退规则引擎。
+
+## 效果预设与智能搭配
+
+界面提供 `smart` 生成选择，以及 `classic`、`cute`、`deadpan`、`office`、`sarcastic`、
+`spectator`、`chaos` 七种具体效果。每个选项使用同一固定参数经正式 Canvas 渲染器生成
+缩略图，因此预览与最终图片不存在两套素材。
+
+`smart` 只存在于生成输入层。`resolveEmojiStyle` 根据 `TextAnalysis.scene`、候选 emotion
+和批次位置，在本地选择具体效果；九项运行时契约不增加字段。`EmojiRecord.style` 只保存
+具体效果，旧记录无需迁移，再次创作时恢复该记录实际使用的效果。
+
+候选区固定为 9 张，不再通过 `IntersectionObserver` 自动追加。“换一批”捕获上一批的
+文案、模式、效果选择与渲染设置，重新执行完整生成流程；旧候选在成功前保持可用，失败
+时不会清空，成功后整批替换。新旧批次均保存在 SQLite 历史记录中。
 
 ## 双版式渲染与数据兼容
 
 渲染设置由 `EmojiRenderSettings` 表示，包含 `layout: 'compact' | 'poster'` 与
 `embedCaption: boolean`。新用户默认使用 `compact + false`，设置经类型化 IPC 保存到
-SQLite `preferences`；浏览器预览使用 `localStorage`。生成批次会捕获设置快照，自动续批
-沿用首批设置，再次创作历史记录时恢复该记录的设置。
+SQLite `preferences`；浏览器预览使用 `localStorage`。生成和换批均使用不可变设置快照，
+再次创作历史记录时恢复该记录的设置。
 
 - **小黄脸**：先在 `640x640` 透明画布绘制，再高质量缩放为 `256x256` PNG。无字模式下
   主体约占画布 85%；带字模式将主体缩至约 72%，底部最多绘制两行、14 个可见字符。
@@ -86,7 +101,7 @@ SQLite `preferences`；浏览器预览使用 `localStorage`。生成批次会捕
   放大约 18% 并垂直居中。
 - 关闭图片内文字不改变运行时九项协议。caption 继续用于卡片标题、检索、复制和导出文件名。
 
-`emoji_records` 同步保存 `layout` 与 `embed_caption`。启动时通过幂等迁移为旧数据库补列，
+`generations` 同步保存 `layout` 与 `embed_caption`。启动时通过幂等迁移为旧数据库补列，
 数据库默认值固定为 `poster + true`，因此旧历史、收藏、复制和导出图片不会被重新渲染或改变。
 
 ## 本地模型运行时
@@ -145,10 +160,10 @@ Ollama 可执行文件依次从用户绝对路径、`EMOJI_PIE_OLLAMA_PATH`、`P
 
 ## 验证策略
 
-- Vitest 覆盖规则分析、严格 9 项响应、本地模型目录与 HTTP 协议、结构化输出重试、
-  Claude/Codex 流协议、Windows shim、Codex 兼容重试、偏好存储、设置规范化与旧库迁移。
+- Vitest 覆盖规则分析、智能效果解析、严格 9 项响应、本地模型目录与 HTTP 协议、结构化
+  输出重试、Claude/Codex 流协议、Windows shim、偏好存储、设置规范化与旧库迁移。
 - TypeScript 与 ESLint 执行静态检查，electron-vite 执行三进程生产构建。
-- Playwright 启动真实 Electron，验证生成、复制、收藏、双版式像素输出、设置恢复、两类
-  运行时设置和 960/1320 布局。
+- Playwright 启动真实 Electron，验证效果缩略图、候选换批与历史保留、生成、复制、收藏、
+  双版式像素输出、设置恢复、两类运行时设置和 960/1320 布局。
 - gated 联调分别通过 preload/IPC 调用真实 Ollama 或已登录 CLI。当前 Windows 环境已验证
   Ollama 0.31.2 + `llama3:latest`，以及 Codex 0.113.0 + GPT-5.4 均返回 9 个方案。

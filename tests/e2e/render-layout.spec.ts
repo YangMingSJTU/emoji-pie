@@ -88,7 +88,7 @@ test('renders, persists and restores compact and poster layouts', async () => {
     await expect(page.getByLabel('图片内文字')).not.toBeChecked()
 
     await page.getByLabel('表情文案').fill('今天又要加班')
-    await page.getByRole('radio', { name: '社畜风' }).click()
+    await page.getByRole('radio', { name: '社畜打工' }).click()
     await generate(page)
 
     const compactCard = page.getByTestId('emoji-card').first()
@@ -144,6 +144,12 @@ test('renders, persists and restores compact and poster layouts', async () => {
     await page.setViewportSize({ width: 960, height: 640 })
     await expect(page.getByRole('radio', { name: '表情海报' })).toBeVisible()
     await expect(page.getByLabel('图片内文字')).toBeVisible()
+    await expect(page.getByRole('radiogroup', { name: '表情效果' }).getByRole('radio'))
+      .toHaveCount(8)
+    const generateButtonBox = await page.getByRole('button', { name: '生成一组' }).boundingBox()
+    expect(generateButtonBox).not.toBeNull()
+    expect((generateButtonBox?.y ?? 640) + (generateButtonBox?.height ?? 1))
+      .toBeLessThanOrEqual(640)
     expect(await page.evaluate(
       () => document.documentElement.scrollWidth <= globalThis.innerWidth
     )).toBe(true)

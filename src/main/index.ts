@@ -9,7 +9,7 @@ import type {
   EmojiRenderSettings,
   LibraryFilter
 } from '../shared/types'
-import { normalizeEmojiRenderSettings } from '../shared/types'
+import { isEmojiStyle, normalizeEmojiRenderSettings } from '../shared/types'
 import { AgentRuntimeManager, normalizeAgentRuntimeSettings } from './agent-runtime'
 import { EmojiRepository } from './repository'
 
@@ -33,6 +33,7 @@ function isEmojiRecord(record: unknown): record is EmojiRecord {
     typeof candidate.prompt === 'string' &&
     candidate.prompt.length <= 500 &&
     typeof candidate.caption === 'string' &&
+    isEmojiStyle(candidate.style) &&
     (candidate.layout === 'compact' || candidate.layout === 'poster') &&
     typeof candidate.embedCaption === 'boolean' &&
     typeof candidate.dataUrl === 'string' &&

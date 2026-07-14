@@ -2,6 +2,7 @@ import {
   DEFAULT_AGENT_RUNTIME_SETTINGS,
   DEFAULT_EMOJI_RENDER_SETTINGS,
   DEFAULT_RUNTIME_ENDPOINTS,
+  isEmojiStyle,
   normalizeEmojiRenderSettings,
   type AgentRuntimeId,
   type AgentRuntimeSettings,
@@ -29,6 +30,7 @@ function readLibrary(): EmojiRecord[] {
     if (!value) return []
     return (JSON.parse(value) as Array<Partial<EmojiRecord>>).map((record) => ({
       ...record,
+      style: isEmojiStyle(record.style) ? record.style : 'classic',
       layout: record.layout === 'compact' ? 'compact' : 'poster',
       embedCaption: typeof record.embedCaption === 'boolean' ? record.embedCaption : true
     })) as EmojiRecord[]

@@ -19,12 +19,35 @@ test('generates, copies and favorites an emoji batch', async () => {
     await window.setViewportSize({ width: 1320, height: 860 })
 
     await expect(window.getByRole('heading', { name: '把这句话做成表情' })).toBeVisible()
+    const effectGroup = window.getByRole('radiogroup', { name: '表情效果' })
+    await expect(effectGroup.getByRole('radio')).toHaveCount(8)
+    await expect(effectGroup.getByRole('radio', { name: '智能搭配' })).toBeChecked()
+    await expect.poll(async () => effectGroup.locator('img').evaluateAll((images) =>
+      images.every((image) => (image as HTMLImageElement).naturalWidth === 256)
+    )).toBe(true)
+
     await window.getByLabel('表情文案').fill('今天又要加班')
-    await window.getByRole('radio', { name: '社畜风' }).click()
+    await window.getByRole('radio', { name: '社畜打工' }).click()
     await window.getByRole('button', { name: '生成一组' }).click()
 
     await expect(window.getByTestId('emoji-card')).toHaveCount(9)
     await expect(window.getByText('工作场景')).toBeVisible()
+    await expect(window.getByText('继续下滑，自动生成更多')).toHaveCount(0)
+
+    const firstSource = await window.getByTestId('emoji-card').first().locator('img').getAttribute('src')
+    await window.getByRole('button', { name: '换一批' }).click()
+    await expect(window.getByRole('button', { name: '生成中' })).toBeVisible()
+    await expect(window.getByTestId('emoji-card')).toHaveCount(9)
+    await expect(window.getByRole('button', { name: '换一批' })).toBeVisible()
+    await expect(window.getByTestId('emoji-card')).toHaveCount(9)
+    const refreshedSource = await window.getByTestId('emoji-card').first().locator('img').getAttribute('src')
+    expect(refreshedSource).not.toBe(firstSource)
+    expect(await window.evaluate(async () => {
+      const api = (globalThis as typeof globalThis & {
+        emojiPie: { library: { list: () => Promise<unknown[]> } }
+      }).emojiPie
+      return (await api.library.list()).length
+    })).toBe(18)
 
     await window.screenshot({ path: testInfo.outputPath('emoji-pie-workspace.png'), fullPage: true })
 

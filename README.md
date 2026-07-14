@@ -5,13 +5,13 @@
 ## 当前能力
 
 - 表达模式与回复模式
-- 默认、可爱、社畜、发疯四种黄脸风格
+- 智能搭配与经典、软萌、冷淡、社畜、阴阳、吃瓜、发疯七种黄脸效果
 - 默认生成 `256x256` 透明小黄脸，也可切换为 `640x640` 表情海报
 - 图片内文字可独立开关，版式与文字设置会记住最近选择
 - 本地规则分析与 Canvas 双版式表情合成，无需 API Key
 - 可直接接入 Ollama、LM Studio、OpenAI-compatible 本地模型服务
 - 可选接入 Claude Code、Codex、OpenCode CLI 运行时
-- 瀑布流结果、自动续批、点击复制 PNG
+- 固定 9 张候选、显式换一批、点击复制 PNG
 - 历史记录、收藏与图片导出
 - Electron + React + TypeScript + SQLite
 

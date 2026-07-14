@@ -1,5 +1,6 @@
 import type {
   EmojiStyle,
+  EmojiStyleSelection,
   EmotionId,
   GenerationMode,
   RuntimeEmojiVariant,
@@ -109,6 +110,51 @@ const RELATED_EMOTIONS: Record<EmotionId, EmotionId[]> = {
   crazy: ['crazy', 'angry', 'surprised']
 }
 
+const SMART_STYLE_CANDIDATES: Record<EmotionId, EmojiStyle[]> = {
+  happy: ['classic', 'cute', 'spectator'],
+  sad: ['cute', 'deadpan', 'office'],
+  angry: ['chaos', 'sarcastic', 'classic'],
+  speechless: ['deadpan', 'sarcastic', 'office'],
+  tired: ['office', 'deadpan', 'classic'],
+  surprised: ['spectator', 'cute', 'classic'],
+  awkward: ['deadpan', 'cute', 'sarcastic'],
+  smug: ['sarcastic', 'classic', 'spectator'],
+  crazy: ['chaos', 'sarcastic', 'spectator']
+}
+
+const SCENE_STYLE_CANDIDATES: Record<TextAnalysis['scene'], EmojiStyle[]> = {
+  daily: ['classic', 'cute'],
+  work: ['office', 'deadpan'],
+  social: ['sarcastic', 'spectator']
+}
+
+const EMOTION_STYLE_OFFSET: Record<EmotionId, number> = {
+  happy: 0,
+  sad: 1,
+  angry: 2,
+  speechless: 1,
+  tired: 0,
+  surprised: 2,
+  awkward: 0,
+  smug: 1,
+  crazy: 2
+}
+
+export function resolveEmojiStyle(
+  selection: EmojiStyleSelection,
+  analysis: TextAnalysis,
+  emotion: EmotionId,
+  position: number
+): EmojiStyle {
+  if (selection !== 'smart') return selection
+  const candidates = [
+    ...SMART_STYLE_CANDIDATES[emotion],
+    ...SCENE_STYLE_CANDIDATES[analysis.scene]
+  ].filter((style, index, values) => values.indexOf(style) === index)
+  const cycleOffset = Math.floor(position / RELATED_EMOTIONS[analysis.emotion].length)
+  return candidates[(position + EMOTION_STYLE_OFFSET[emotion] + cycleOffset) % candidates.length]
+}
+
 const REPLY_CAPTIONS: Record<EmotionId, string[]> = {
   happy: ['好耶，这就来', '没问题，包在我身上', '快乐同意', '这事我爱听'],
   sad: ['让我缓一缓', '弱小但会回复', '我先哭一下', '这真的可以吗'],
@@ -188,7 +234,7 @@ export function createCaption(
 export function createGenerationSpecs(
   prompt: string,
   mode: GenerationMode,
-  style: EmojiStyle,
+  style: EmojiStyleSelection,
   count: number,
   offset = 0,
   nonce = Date.now(),
@@ -218,7 +264,7 @@ export function createGenerationSpecs(
       id: `${nonce.toString(36)}-${position.toString(36)}-${seed.toString(36)}`,
       prompt: normalized,
       mode,
-      style,
+      style: resolveEmojiStyle(style, analysis, emotion, position),
       emotion,
       caption: customVariant
         ? customVariant.caption

@@ -32,6 +32,14 @@ const PALETTES: Record<EmojiStyle, Palette> = {
     paper: '#fffaf9',
     accent: '#e85d83'
   },
+  deadpan: {
+    background: '#e8e6df',
+    secondary: '#9b9a92',
+    face: '#f2ce58',
+    ink: '#34332f',
+    paper: '#fbfaf6',
+    accent: '#6f7d80'
+  },
   office: {
     background: '#dfeee6',
     secondary: '#6ea98b',
@@ -39,6 +47,22 @@ const PALETTES: Record<EmojiStyle, Palette> = {
     ink: '#27302b',
     paper: '#fbfdfb',
     accent: '#4f7895'
+  },
+  sarcastic: {
+    background: '#e7eee1',
+    secondary: '#8ba679',
+    face: '#f6d052',
+    ink: '#302c27',
+    paper: '#fffdf5',
+    accent: '#8d5b9f'
+  },
+  spectator: {
+    background: '#fff0d8',
+    secondary: '#e89559',
+    face: '#ffd454',
+    ink: '#302921',
+    paper: '#fffaf2',
+    accent: '#4e9868'
   },
   chaos: {
     background: '#2b2925',
@@ -99,6 +123,49 @@ function line(
   context.lineCap = 'round'
   context.lineJoin = 'round'
   context.stroke()
+}
+
+function drawSparkle(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  color: string
+): void {
+  line(context, [[x, y - size], [x, y + size]], color, Math.max(5, size * 0.22))
+  line(context, [[x - size, y], [x + size, y]], color, Math.max(5, size * 0.22))
+}
+
+function drawWatermelon(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  scale: number,
+  ink: string
+): void {
+  context.save()
+  context.translate(x, y)
+  context.rotate(-0.18)
+  context.scale(scale, scale)
+  context.beginPath()
+  context.moveTo(-42, 17)
+  context.quadraticCurveTo(0, -48, 42, 17)
+  context.closePath()
+  context.fillStyle = '#ed6a67'
+  context.fill()
+  context.strokeStyle = ink
+  context.lineWidth = 7
+  context.lineJoin = 'round'
+  context.stroke()
+  line(context, [[-39, 14], [39, 14]], '#4f9c66', 12)
+  line(context, [[-38, 10], [38, 10]], '#d8efb0', 5)
+  for (const [seedX, seedY] of [[-17, -2], [0, -14], [18, -1]] as const) {
+    context.beginPath()
+    context.ellipse(seedX, seedY, 3.5, 7, -0.15, 0, Math.PI * 2)
+    context.fillStyle = ink
+    context.fill()
+  }
+  context.restore()
 }
 
 function drawBackground(
@@ -361,6 +428,19 @@ function drawStyleDetails(
     }
   }
 
+  if (style === 'deadpan') {
+    context.save()
+    context.globalAlpha = 0.24
+    context.fillStyle = palette.accent
+    context.beginPath()
+    context.ellipse(centerX - 63, centerY + 3, 39, 16, 0.08, 0, Math.PI * 2)
+    context.ellipse(centerX + 63, centerY + 3, 39, 16, -0.08, 0, Math.PI * 2)
+    context.fill()
+    context.restore()
+    line(context, [[centerX - 92, centerY - 82], [centerX - 37, centerY - 79]], palette.ink, 8)
+    line(context, [[centerX + 37, centerY - 79], [centerX + 92, centerY - 82]], palette.ink, 8)
+  }
+
   if (style === 'office') {
     roundedRect(context, centerX - 118, centerY + 140, 236, 86, 10)
     context.fillStyle = '#6688a0'
@@ -377,6 +457,18 @@ function drawStyleDetails(
       context.textAlign = 'center'
       context.fillText('今天也要努力工作', centerX, centerY + 186)
     }
+  }
+
+  if (style === 'sarcastic') {
+    line(context, [[centerX - 98, centerY - 88], [centerX - 38, centerY - 103]], palette.ink, 9)
+    line(context, [[centerX + 39, centerY - 83], [centerX + 94, centerY - 78]], palette.ink, 8)
+    drawSparkle(context, centerX + 176, centerY - 112, 22, palette.accent)
+    drawSparkle(context, centerX + 205, centerY - 76, 10, palette.secondary)
+  }
+
+  if (style === 'spectator') {
+    drawWatermelon(context, centerX + 148, centerY + 127, 0.92, palette.ink)
+    drawSparkle(context, centerX - 182, centerY - 92, 14, palette.accent)
   }
 
   if (style === 'chaos') {
@@ -418,6 +510,19 @@ function drawCompactStyleDetails(
     context.restore()
   }
 
+  if (style === 'deadpan') {
+    context.save()
+    context.globalAlpha = 0.22
+    context.fillStyle = palette.accent
+    context.beginPath()
+    context.ellipse(centerX - 63, centerY + 3, 38, 15, 0.08, 0, Math.PI * 2)
+    context.ellipse(centerX + 63, centerY + 3, 38, 15, -0.08, 0, Math.PI * 2)
+    context.fill()
+    context.restore()
+    line(context, [[centerX - 90, centerY - 80], [centerX - 38, centerY - 78]], palette.ink, 7)
+    line(context, [[centerX + 38, centerY - 78], [centerX + 90, centerY - 80]], palette.ink, 7)
+  }
+
   if (style === 'office') {
     context.save()
     context.globalAlpha = 0.2
@@ -427,6 +532,17 @@ function drawCompactStyleDetails(
     context.ellipse(centerX + 63, centerY + 2, 38, 15, -0.08, 0, Math.PI * 2)
     context.fill()
     context.restore()
+  }
+
+  if (style === 'sarcastic') {
+    line(context, [[centerX - 96, centerY - 87], [centerX - 39, centerY - 100]], palette.ink, 8)
+    line(context, [[centerX + 40, centerY - 82], [centerX + 92, centerY - 77]], palette.ink, 7)
+    drawSparkle(context, centerX + 166, centerY - 103, 18, palette.accent)
+  }
+
+  if (style === 'spectator') {
+    drawWatermelon(context, centerX + 132, centerY + 125, 0.72, palette.ink)
+    drawSparkle(context, centerX - 168, centerY - 92, 12, palette.accent)
   }
 
   if (style === 'chaos') {

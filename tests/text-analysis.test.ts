@@ -38,6 +38,21 @@ describe('generation parameters', () => {
     expect(new Set(first.map((item) => item.seed)).size).toBe(9)
   })
 
+  it('resolves smart selection into a varied set of concrete effects', () => {
+    const result = createGenerationSpecs('今天又要加班', 'express', 'smart', 9, 0, 1234)
+    const styles = new Set(result.map((item) => item.style))
+
+    expect(styles.size).toBeGreaterThanOrEqual(3)
+    expect([...styles].join(',')).not.toContain('smart')
+    expect(styles.has('office')).toBe(true)
+  })
+
+  it('keeps an explicitly selected effect across the whole batch', () => {
+    const result = createGenerationSpecs('我先看看', 'reply', 'spectator', 9, 0, 4321)
+
+    expect(new Set(result.map((item) => item.style))).toEqual(new Set(['spectator']))
+  })
+
   it('returns varied reply captions', () => {
     const captions = Array.from({ length: 4 }, (_, index) =>
       createCaption('这个需求简单改一下', 'reply', 'tired', index)

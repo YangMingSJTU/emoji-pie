@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import type { EmojiRecord, LibraryFilter } from '../shared/types'
+import { isEmojiStyle, type EmojiRecord, type LibraryFilter } from '../shared/types'
 
 interface StoredEmojiRow {
   id: string
@@ -36,7 +36,7 @@ function mapRow(row: StoredEmojiRow): EmojiRecord {
     id: row.id,
     prompt: row.prompt,
     mode: row.mode,
-    style: row.style,
+    style: isEmojiStyle(row.style) ? row.style : 'classic',
     layout: row.layout === 'compact' ? 'compact' : 'poster',
     embedCaption: row.embed_caption === 1,
     emotion: row.emotion,

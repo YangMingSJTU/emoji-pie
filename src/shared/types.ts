@@ -1,6 +1,22 @@
 export type GenerationMode = 'express' | 'reply'
 
-export type EmojiStyle = 'classic' | 'cute' | 'office' | 'chaos'
+export const EMOJI_STYLES = [
+  'classic',
+  'cute',
+  'deadpan',
+  'office',
+  'sarcastic',
+  'spectator',
+  'chaos'
+] as const
+
+export type EmojiStyle = (typeof EMOJI_STYLES)[number]
+
+export type EmojiStyleSelection = 'smart' | EmojiStyle
+
+export function isEmojiStyle(value: unknown): value is EmojiStyle {
+  return typeof value === 'string' && (EMOJI_STYLES as readonly string[]).includes(value)
+}
 
 export type EmojiLayout = 'compact' | 'poster'
 
