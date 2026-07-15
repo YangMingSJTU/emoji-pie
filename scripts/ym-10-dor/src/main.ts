@@ -308,7 +308,7 @@ async function runStage2PackagedHarness(outputDirectory: string): Promise<Stage2
 
     const killStartedAt = performance.now()
     const crashFixture = fixtures.find(
-      ({ fixture }) => fixture.id === 'forty_megapixels'
+      ({ fixture }) => fixture.id === 'edge_8192_by_1024'
     ) ?? fixtures[0]
     const killTarget = processor.processLocal(crashFixture.imported.bytes, 0)
     const killedWorkerPid = processor.terminateBusyWorker()
@@ -629,7 +629,18 @@ void app.whenReady().then(async () => {
       await runSmoke(smokeReportPath, metricsPath)
       app.exit(0)
     } catch (error) {
+      const errorCode = error instanceof Error && /^[a-z0-9_]+$/u.test(error.message)
+        ? error.message
+        : 'packaged_smoke_failed'
       console.error(error)
+      if (!(await pathExists(smokeReportPath))) {
+        await writeFile(smokeReportPath, `${JSON.stringify({
+          schema_version: 1,
+          probe_version: PROBE_VERSION,
+          status: 'fail',
+          error_code: errorCode
+        }, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' })
+      }
       app.exit(1)
     }
     return
