@@ -118,7 +118,7 @@ describe('fixed concurrency and fail-closed license contracts', () => {
     })
 
     expect(result.assets.map(({ id }) => id)).toEqual([
-      '00000000-0000-4000-8000-000000000011',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11',
       '00000000-0000-4000-8000-000000000012'
     ])
     expect(result.assets.map(({ license }) => license)).toEqual(['cc0', 'pdm'])
@@ -132,6 +132,28 @@ describe('fixed concurrency and fail-closed license contracts', () => {
       unknown: 1,
       rejected: 16
     })
+  })
+
+  it('canonicalizes UUID case before thumbnail comparison and deduplication', async () => {
+    const origin = 'https://127.0.0.1:4443'
+    const payload = JSON.parse(
+      (await readFile(join(fixturesDirectory, 'openverse-license-matrix.json'), 'utf8'))
+        .replaceAll('{{ORIGIN}}', origin)
+    )
+    const expectedIds: string[] = []
+    const result = filterEligibleAssets(payload, (value, expectedId) => {
+      expectedIds.push(expectedId)
+      const url = new URL(value)
+      const match = /^\/v1\/images\/([0-9a-f-]+)\/thumb\/$/u.exec(url.pathname)
+      return url.origin === origin && match?.[1] === expectedId && !url.search && !url.hash
+    })
+
+    const canonicalId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11'
+    expect(result.assets.filter(({ id }) => id === canonicalId)).toHaveLength(1)
+    expect(result.assets.find(({ id }) => id === canonicalId)?.foreignLandingUrl)
+      .toBe('https://example.invalid/11')
+    expect(expectedIds).toContain(canonicalId)
+    expect(expectedIds.every((id) => id === id.toLowerCase())).toBe(true)
   })
 
   it('keeps origin and thumbnail ID fixed', () => {

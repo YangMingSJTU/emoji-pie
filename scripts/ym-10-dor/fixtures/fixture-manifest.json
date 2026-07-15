@@ -5,9 +5,9 @@
   "fixtures": [
     {
       "path": "openverse-license-matrix.json",
-      "role": "fail-closed license, maturity, ID, thumbnail, and license-link matrix",
-      "size_bytes": 5564,
-      "sha256": "c7bc6ee277dcea2c696360a1780e99383404b99e690608ebbc160776ad1fc3ee"
+      "role": "fail-closed license, maturity, canonical UUID deduplication, thumbnail, and license-link matrix",
+      "size_bytes": 5577,
+      "sha256": "6c137cb681846d6fc366536f6617020ed1a0d0725824a2e85b3273771105dca4"
     },
     {
       "path": "openverse-smoke.json",

@@ -22,7 +22,7 @@ It does not contain the EmojiPie creation UI, history, favorites, database migra
 - Planning is local. Planning never copies unknown input tokens into fallback keywords. The renderer must show editable 1–3 keywords, and only a separate confirmation action may invoke transport.
 - Missing confirmation returns `keywords_confirmation_required` before any request or real-online quota mutation. Corpus 43/44/48, corpus 50, and arbitrary PII/project text are regression cases.
 - Openverse origin is `https://api.openverse.org`; search path is `/v1/images/`; thumbnail path is `/v1/images/<matching-uuid>/thumb/`. Redirects, credentials, query-bearing thumbnails, and ID/path mismatches are rejected.
-- Only `mature === false` records with complete source fields and matching canonical CC0/PDM Creative Commons URLs are eligible.
+- Only `mature === false` records with complete source fields and matching canonical CC0/PDM Creative Commons URLs are eligible; valid UUIDs are lowercased before thumbnail comparison, deduplication, and output.
 - Search JSON is bounded to 2 MiB. Remote images are bounded to 10 MiB, must declare PNG/JPEG/WebP, and must have matching magic bytes before entering Sharp.
 - Search concurrency is 1, download concurrency is 3, Sharp concurrency is 2, and each Sharp job has a fixed 3-second watchdog. Timeout/crash terminates and replaces only that worker; queued work continues through a replacement.
 - Real online execution is limited to 10 confirmed batches per installation per UTC day.

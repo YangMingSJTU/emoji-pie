@@ -70,13 +70,14 @@ export function filterEligibleAssets(
     const classification = classifyLicense(license)
     distribution[classification] += 1
 
-    const id = clean(result.id, 180)
+    const rawId = clean(result.id, 180)
+    const id = rawId.toLowerCase()
     const foreignLandingUrl = clean(result.foreign_landing_url)
     const licenseUrl = clean(result.license_url)
     const source = clean(result.source, 180)
     const thumbnailUrl = clean(result.thumbnail)
     const accepted = (classification === 'cc0' || classification === 'pdm') &&
-      result.mature === false && OPENVERSE_ASSET_ID.test(id) && !seen.has(id) &&
+      result.mature === false && OPENVERSE_ASSET_ID.test(rawId) && !seen.has(id) &&
       isHttpsUrl(foreignLandingUrl) && licenseUrlMatches(licenseUrl, classification) &&
       Boolean(source) && isThumbnailUrlAllowed(thumbnailUrl, id)
 
