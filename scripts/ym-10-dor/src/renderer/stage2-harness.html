@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YM-10 Stage 2 Packaged Harness</title>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: #111827;
+        color: #e5e7eb;
+        font-family: system-ui, sans-serif;
+      }
+      main {
+        width: min(680px, calc(100vw - 48px));
+        padding: 28px;
+        border: 1px solid #374151;
+        border-radius: 16px;
+        background: #1f2937;
+      }
+      h1 { margin-top: 0; font-size: 22px; }
+      #error {
+        min-height: 52px;
+        padding: 14px;
+        border-radius: 10px;
+        color: #fecaca;
+        background: #7f1d1d;
+        white-space: pre-wrap;
+      }
+      #state { color: #93c5fd; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Stage 2 packaged recovery harness</h1>
+      <p id="state">ready</p>
+      <pre id="error" role="alert">No worker error</pre>
+    </main>
+    <script src="./stage2-harness.js"></script>
+  </body>
+</html>

@@ -191,7 +191,7 @@ await writeFile(
 
 const stagedPackage = {
   name: 'ym-10-dor-probe',
-  version: '0.2.0',
+  version: '0.3.0',
   private: true,
   main: 'main.js',
   dependencies: { sharp: EXPECTED_TOOLCHAIN.sharp }

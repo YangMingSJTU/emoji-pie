@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import sharp from 'sharp'
+import { MAX_LOCAL_IMAGE_BYTES, MAX_REMOTE_IMAGE_BYTES } from './constants'
 
-const MAX_INPUT_BYTES = 10 * 1024 * 1024
 const MAX_INPUT_PIXELS = 40_000_000
 const MAX_EDGE = 8_192
 const OUTPUT_EDGE = 512
@@ -10,9 +10,11 @@ const POSITIONS = ['centre', 'north', 'south', 'east', 'west', 'northeast', 'nor
 
 export async function processImageBytes(
   input: Buffer,
-  variantIndex: number
+  variantIndex: number,
+  inputKind: 'remote' | 'local' = 'remote'
 ): Promise<{ png: Buffer; sha256: string }> {
-  if (input.byteLength === 0 || input.byteLength > MAX_INPUT_BYTES) {
+  const maximumBytes = inputKind === 'local' ? MAX_LOCAL_IMAGE_BYTES : MAX_REMOTE_IMAGE_BYTES
+  if (input.byteLength === 0 || input.byteLength > maximumBytes) {
     throw new Error('image_size_rejected')
   }
   const source = sharp(input, {

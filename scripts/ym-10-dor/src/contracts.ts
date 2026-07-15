@@ -39,6 +39,12 @@ export interface SearchOutcome {
   payload: unknown
 }
 
+export interface DetailOutcome {
+  statusCode: number
+  responseBytes: number
+  payload: unknown
+}
+
 export interface DownloadOutcome {
   bytes: Buffer
   statusCode: number
@@ -47,7 +53,9 @@ export interface DownloadOutcome {
 
 export interface ProbeTransport {
   readonly mode: ProbeTransportMode
+  cooldownState(): { notBeforeMs: number; remainingMs: number }
   search(keywords: readonly string[]): Promise<SearchOutcome>
+  detail(assetId: string): Promise<DetailOutcome>
   download(asset: OpenverseAsset): Promise<DownloadOutcome>
   isThumbnailUrlAllowed(value: string, expectedId?: string): boolean
 }

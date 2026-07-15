@@ -317,6 +317,8 @@ async function createDeterministicPipeline() {
   let searchRequests = 0
   const transport: ProbeTransport = {
     mode: 'fixture',
+    cooldownState: () => ({ notBeforeMs: 0, remainingMs: 0 }),
+    detail: async () => ({ statusCode: 200, responseBytes: 0, payload: {} }),
     search: async () => {
       searchRequests += 1
       return { statusCode: 200, responseBytes: 1234, payload }

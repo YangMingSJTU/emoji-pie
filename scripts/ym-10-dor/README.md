@@ -1,4 +1,4 @@
-# YM-10 Stage 1 DOR probe
+# YM-10 Stage 2 engineering validation probe
 
 This directory contains an independent, non-release Electron validation probe. It is deliberately outside `src/**`, is not referenced by the root `package.json`, `electron.vite.config.ts`, or the production electron-builder configuration, and is never included by `npm run build` or `npm run package:win`.
 
@@ -24,6 +24,9 @@ It does not contain the EmojiPie creation UI, history, favorites, database migra
 - Openverse origin is `https://api.openverse.org`; search path is `/v1/images/`; thumbnail path is `/v1/images/<matching-uuid>/thumb/`. Redirects, credentials, query-bearing thumbnails, and ID/path mismatches are rejected.
 - Only `mature === false` records with complete source fields and matching canonical CC0/PDM Creative Commons URLs are eligible; valid UUIDs are lowercased before thumbnail comparison, deduplication, and output.
 - Search JSON is bounded to 2 MiB. Remote images are bounded to 10 MiB, must declare PNG/JPEG/WebP, and must have matching magic bytes before entering Sharp.
+- Local boundary fixtures are opened and stat/read bounded to 20 MiB; extension, declared MIME, and magic bytes must agree before utility-process decode.
+- Source detail checks are lazy at 24 hours, mandatory before recreation, and suppressed on startup/grid/history; transient failures preserve the last successful state.
+- Retry-After cooldown accepts bounded delta-seconds or HTTP-date values, sends no request while active, and performs no automatic retry.
 - Search concurrency is 1, download concurrency is 3, Sharp concurrency is 2, and each Sharp job has a fixed 3-second watchdog. Timeout/crash terminates and replaces only that worker; queued work continues through a replacement.
 - Real online execution is limited to 10 confirmed batches per installation per UTC day.
 - Metrics contain only corpus ID, timings, status code, counts, license distribution, byte counts, and SHA256 values. Input, keyword text, image content, and raw local paths are absent.
@@ -67,4 +70,4 @@ The output root must be absolute, empty, and outside the repository. It contains
 
 ## Gate
 
-This probe and its evidence require technical-lead implementation-equivalence review before QA. Do not start QA or Stage 2 until the technical review explicitly passes. The probe never substitutes for formal application DoD evidence.
+This Stage 2 rework and its evidence require technical-lead review before QA. Stage 3, business `src/**`, formal build integration, raw capture, 4-core/8-GB resource capture, and interactive recording remain outside this run. The probe never substitutes for formal application DoD evidence.

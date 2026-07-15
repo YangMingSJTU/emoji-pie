@@ -377,7 +377,7 @@ const packageChecks = {
 }
 const verification = {
   schema_version: 2,
-  conclusion: 'stage1_minor_closed_ready_for_technical_rereview',
+  conclusion: 'stage2_a1_a2_c1_c2_c3_closed_ready_for_technical_rereview',
   source: {
     clean_exact_commit_before_npm_ci: true,
     clean_exact_commit_after_all_commands: false,
@@ -399,7 +399,15 @@ const verification = {
     check_count: Object.keys(smokeReport.checks ?? {}).length,
     all_checks_passed: Object.values(smokeReport.checks ?? {}).every(Boolean),
     metrics_record_count: smokeReport.evidence?.metrics_record_count,
-    metrics_sha256: smokeReport.evidence?.metrics_sha256
+    metrics_sha256: smokeReport.evidence?.metrics_sha256,
+    stage2_harness: {
+      fixture_count: smokeReport.stage2_harness?.fixtures?.length,
+      output_count: smokeReport.stage2_harness?.output_count,
+      recovery_ms: smokeReport.stage2_harness?.recovery_ms,
+      output_set_sha256: smokeReport.stage2_harness?.output_set_sha256,
+      error_screenshot_sha256: smokeReport.stage2_harness?.error_screenshot?.sha256,
+      all_checks_passed: Object.values(smokeReport.stage2_harness?.checks ?? {}).every(Boolean)
+    }
   },
   package: packageChecks,
   installer: {
@@ -407,12 +415,18 @@ const verification = {
     parts_reassembled_and_verified: true
   },
   gate: {
-    stage2_started: false,
+    stage2_started: true,
+    stage3_started: false,
     business_source_modified: false,
     formal_build_integration: false,
     reviewed_commit_qa: 'passed',
     replacement_commit_qa: 'not_started',
-    technical_rereview: 'pending'
+    technical_rereview: 'pending',
+    deferred_reference_environment_evidence: [
+      'raw_capture',
+      '4_core_8_gb_resource_capture',
+      'interactive_recording'
+    ]
   }
 }
 assertCleanCheckout()
@@ -422,21 +436,67 @@ await writeJson(join(evidenceRoot, 'verification.json'), verification)
 
 const blockerClosure = {
   schema_version: 2,
-  reviewed_commit: '082f7a35f7d402a090d34519916f1c19e170a7ce',
+  reviewed_commit: '6c5b7ed04033d2305b242c3bc690735583b04cd4',
   replacement_commit: sourceCommit,
   items: [
     {
-      severity: 'minor',
-      id: 'MINOR-canonical-uuid-deduplication',
+      severity: 'major',
+      id: 'A1-lazy-source-recheck',
       status: 'closed_by_rework_pending_review',
       implementation: [
-        'valid asset UUID is canonicalized to lowercase before thumbnail comparison',
-        'the lowercase UUID is used for seen-set deduplication and emitted asset ID',
-        'the case-variant duplicate fixture preserves the first canonical asset exactly once'
+        'detail rechecks only without a successful check or after 24 hours; recreate always rechecks',
+        'startup, grid, and history perform no source request',
+        'verified, license_changed, unavailable, and unchecked are explicit; transient failures preserve prior successful state',
+        'only verified state permits recreation'
+      ],
+      evidence: ['source/ym-10-dor/src/source-recheck.ts', 'results/probe-tests.json']
+    },
+    {
+      severity: 'major',
+      id: 'A2-retry-after-cooldown',
+      status: 'closed_by_rework_pending_review',
+      implementation: [
+        'delta-seconds and HTTP-date Retry-After values are parsed against an injected clock and capped',
+        'cooldown not-before and remaining duration are auditable',
+        'user actions during cooldown send zero requests; exactly one request is admitted after expiry'
+      ],
+      evidence: ['source/ym-10-dor/src/network.ts', 'results/probe-tests.json']
+    },
+    {
+      severity: 'major',
+      id: 'C1-local-20-mib-boundary',
+      status: 'closed_by_rework_pending_review',
+      implementation: [
+        'local files are opened, stat-bounded, and read with a growth sentinel before utility processing',
+        'local input is capped at 20 MiB while remote input remains capped at 10 MiB',
+        'a valid 19 MiB fixture passes the local entry and worker input contract'
+      ],
+      evidence: ['source/ym-10-dor/src/local-image-import.ts', 'results/probe-tests.json']
+    },
+    {
+      severity: 'major',
+      id: 'C2-local-media-consistency',
+      status: 'closed_by_rework_pending_review',
+      implementation: [
+        'extension, declared MIME, and magic bytes must all match',
+        'unknown and conflicting local media types fail closed before Sharp',
+        'regressions exercise the actual local import entry'
+      ],
+      evidence: ['source/ym-10-dor/src/local-image-import.ts', 'results/probe-tests.json']
+    },
+    {
+      severity: 'major',
+      id: 'C3-packaged-deterministic-harness',
+      status: 'closed_by_rework_pending_review',
+      implementation: [
+        'versioned generator creates four boundary fixtures and the packaged main routes them to two real utility processes for nine outputs',
+        'a busy real utility process is killed during processing and replaced within three seconds before successful retry',
+        'main and sandboxed renderer heartbeats, input/settings/previous-batch preservation, and a screenshotable worker error are recorded'
       ],
       evidence: [
-        'source/ym-10-dor/fixtures/openverse-license-matrix.json',
-        'results/probe-tests.json'
+        'source/ym-10-dor/src/stage2-fixture-generator.ts',
+        'results/smoke/smoke-report.json',
+        'results/smoke/stage2-harness-worker-error.png'
       ]
     }
   ]
@@ -471,9 +531,9 @@ for (const artifactPath of artifactPaths) {
 const manifest = {
   schema_version: 2,
   issue_id: ISSUE_ID,
-  stage: 1,
+  stage: 2,
   generated_at_utc: new Date().toISOString(),
-  conclusion: 'minor_closed_ready_for_technical_rereview',
+  conclusion: 'a1_a2_c1_c2_c3_closed_ready_for_technical_rereview',
   source: {
     commit: sourceCommit,
     parent: sourceParent,
@@ -518,7 +578,7 @@ const manifest = {
 }
 await writeJson(join(evidenceRoot, 'manifest.json'), manifest)
 
-const evidenceZip = join(outputRoot, `YM-10-Stage1-rework-${sourceCommit.slice(0, 8)}-evidence.zip`)
+const evidenceZip = join(outputRoot, `YM-10-Stage2-rework-${sourceCommit.slice(0, 8)}-evidence.zip`)
 const archiveResult = spawnSync('tar', ['-a', '-c', '-f', evidenceZip, '-C', evidenceRoot, '.'], {
   cwd: outputRoot,
   encoding: 'utf8',

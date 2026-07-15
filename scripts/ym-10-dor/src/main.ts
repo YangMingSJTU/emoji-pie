@@ -1,20 +1,23 @@
 import { createHash } from 'node:crypto'
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
+import { performance } from 'node:perf_hooks'
 import { app, BrowserWindow, ipcMain } from 'electron'
-import { BASELINE_COMMIT, BASELINE_PACKAGE_LOCK_GIT_BLOB_SHA256, DECODE_CONCURRENCY, PROBE_VERSION } from './constants'
+import { BASELINE_COMMIT, BASELINE_PACKAGE_LOCK_GIT_BLOB_SHA256, DECODE_CONCURRENCY, MAX_LOCAL_IMAGE_BYTES, PROBE_VERSION } from './constants'
 import type { KeywordPlan, OpenverseAsset, ProbeMetrics, ProbeRunRequest, ProbeTransport } from './contracts'
 import { DailyOnlineQuota } from './daily-quota'
 import { ElectronClipboardProbe, FileExportProbe } from './electron-adapters'
 import { SECURITY_IMAGE_IDS, startFixtureServer, type RunningFixtureServer } from './fixture-server'
 import { stableSha256 } from './hashing'
 import { normalizeConfirmedKeywords, planKeywords } from './keyword-planner'
+import { importLocalImage } from './local-image-import'
 import { assertMetricsMatchSchema } from './metrics'
 import { NdjsonMetricsWriter } from './metrics-writer'
 import { createFixtureTransport, createOpenverseTransport } from './network'
 import { ConfirmedOnlineBatchGate } from './online-authorization'
 import { Ym10ProbePipeline } from './pipeline'
 import { assertNoForbiddenValues } from './privacy'
+import { generateStage2BoundaryFixtures } from './stage2-fixture-generator'
 import { SharpUtilityProcessPool } from './worker-pool'
 
 interface RendererPlanRequest {
@@ -33,6 +36,42 @@ interface BuildProvenance {
   base_commit: string
   package_lock_git_blob_sha256: string
   package_lock_worktree_sha256: string
+}
+
+interface RendererHarnessSnapshot {
+  state: {
+    input: string
+    settings: Record<string, unknown>
+    previousBatch: string[]
+  }
+  heartbeatCount: number
+  maximumHeartbeatGapMs: number
+  errorText: string
+}
+
+interface Stage2HarnessReport {
+  fixture_generator_version: string
+  fixtures: Array<{ id: string; size_bytes: number; width: number; height: number }>
+  worker_pids_before_kill: number[]
+  worker_pids_after_recovery: number[]
+  killed_worker_pid: number | null
+  recovery_ms: number
+  output_count: number
+  output_set_sha256: string
+  retry_output_sha256: string | null
+  heartbeat: {
+    main_count: number
+    main_maximum_gap_ms: number
+    renderer_count: number
+    renderer_maximum_gap_ms: number
+  }
+  preservation: {
+    input: boolean
+    settings: boolean
+    previous_batch: boolean
+  }
+  error_screenshot: { filename: string; size_bytes: number; sha256: string }
+  checks: Record<string, boolean>
 }
 
 interface SmokeReport {
@@ -58,6 +97,7 @@ interface SmokeReport {
     search_request_count: number
     image_request_count: number
   }
+  stage2_harness: Stage2HarnessReport
   evidence: {
     metrics_sha256: string
     metrics_record_count: number
@@ -216,6 +256,138 @@ async function runSecurityDiagnostics(
   }
 }
 
+async function runStage2PackagedHarness(outputDirectory: string): Promise<Stage2HarnessReport> {
+  const fixtureDirectory = join(outputDirectory, 'stage2-boundary-fixtures')
+  const fixtureRecords = await generateStage2BoundaryFixtures(fixtureDirectory)
+  const fixtures = await Promise.all(fixtureRecords.map(async (fixture) => ({
+    fixture,
+    imported: await importLocalImage(fixture.path, fixture.declaredMediaType)
+  })))
+  const processor = new SharpUtilityProcessPool(WORKER_PATH)
+  const window = new BrowserWindow({
+    width: 760,
+    height: 480,
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.on('will-navigate', (event) => event.preventDefault())
+
+  let mainHeartbeatCount = 0
+  let mainMaximumGapMs = 0
+  let lastMainHeartbeat = performance.now()
+  const mainHeartbeat = setInterval(() => {
+    const now = performance.now()
+    mainMaximumGapMs = Math.max(mainMaximumGapMs, now - lastMainHeartbeat)
+    lastMainHeartbeat = now
+    mainHeartbeatCount += 1
+  }, 50)
+
+  try {
+    await window.loadFile(join(__dirname, 'renderer', 'stage2-harness.html'))
+    const workerPidsBeforeKill = processor.activeWorkerPids()
+    const outputs = await Promise.all(Array.from({ length: 9 }, (_, index) => {
+      return processor.processLocal(fixtures[index % fixtures.length].imported.bytes, index)
+    }))
+    const outputHashes = outputs.map(({ sha256: value }) => value)
+    const preservedState = {
+      input: 'stage2-boundary-fixture-batch',
+      settings: { variants: 9, source: 'local', mode: 'non-release-probe' },
+      previousBatch: outputHashes
+    }
+    await window.webContents.executeJavaScript(
+      `globalThis.stage2Harness.setState(${JSON.stringify(preservedState)})`
+    )
+    const before = await window.webContents.executeJavaScript(
+      'globalThis.stage2Harness.snapshot()'
+    ) as RendererHarnessSnapshot
+
+    const killStartedAt = performance.now()
+    const killTarget = processor.processLocal(
+      fixtures.find(({ fixture }) => fixture.id === 'forty_megapixels')?.imported.bytes ??
+        fixtures[0].imported.bytes,
+      0
+    )
+    const killedWorkerPid = processor.terminateBusyWorker()
+    const killRejected = await rejectsWith(killTarget, 'sharp_worker_exited')
+    const recoveryMs = Math.round(performance.now() - killStartedAt)
+    const workerPidsAfterRecovery = processor.activeWorkerPids()
+
+    await window.webContents.executeJavaScript(
+      `globalThis.stage2Harness.showWorkerError('sharp_worker_exited', ${JSON.stringify(killedWorkerPid)})`
+    )
+    const screenshotBytes = window.webContents.capturePage
+      ? (await window.webContents.capturePage()).toPNG()
+      : Buffer.alloc(0)
+    const screenshotFilename = 'stage2-harness-worker-error.png'
+    await writeFile(join(outputDirectory, screenshotFilename), screenshotBytes, { flag: 'wx' })
+
+    const retry = await processor.processLocal(fixtures[0].imported.bytes, 0)
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 100))
+    const after = await window.webContents.executeJavaScript(
+      'globalThis.stage2Harness.snapshot()'
+    ) as RendererHarnessSnapshot
+    const preservation = {
+      input: before.state.input === after.state.input,
+      settings: JSON.stringify(before.state.settings) === JSON.stringify(after.state.settings),
+      previous_batch: JSON.stringify(before.state.previousBatch) ===
+        JSON.stringify(after.state.previousBatch)
+    }
+    const checks = {
+      four_boundary_fixtures_generated: fixtures.length === 4,
+      all_boundary_fixtures_entered_local_import: fixtures.every(
+        ({ imported }) => imported.bytes.byteLength > 0 && imported.bytes.byteLength <= MAX_LOCAL_IMAGE_BYTES
+      ),
+      real_utility_process_pool_fixed_at_two: workerPidsBeforeKill.length === DECODE_CONCURRENCY,
+      nine_outputs_completed: outputs.length === 9 && outputs.every(({ png }) => png.byteLength > 0),
+      busy_real_utility_process_killed: killedWorkerPid !== null && killRejected,
+      worker_replaced_within_three_seconds: recoveryMs <= 3_000 &&
+        workerPidsAfterRecovery.length === DECODE_CONCURRENCY &&
+        !workerPidsAfterRecovery.includes(killedWorkerPid ?? -1),
+      retry_completed_after_replacement: retry.png.byteLength > 0,
+      main_heartbeat_responsive: mainHeartbeatCount > 0 && mainMaximumGapMs < 1_500,
+      renderer_heartbeat_responsive: after.heartbeatCount > 0 && after.maximumHeartbeatGapMs < 1_500,
+      input_settings_previous_batch_preserved: Object.values(preservation).every(Boolean),
+      screenshotable_worker_error_present: screenshotBytes.byteLength > 0 &&
+        after.errorText.includes('sharp_worker_exited')
+    }
+    return {
+      fixture_generator_version: PROBE_VERSION,
+      fixtures: fixtureRecords.map(({ id, sizeBytes, width, height }) => ({
+        id, size_bytes: sizeBytes, width, height
+      })),
+      worker_pids_before_kill: workerPidsBeforeKill,
+      worker_pids_after_recovery: workerPidsAfterRecovery,
+      killed_worker_pid: killedWorkerPid,
+      recovery_ms: recoveryMs,
+      output_count: outputs.length,
+      output_set_sha256: stableSha256(outputHashes),
+      retry_output_sha256: retry.sha256,
+      heartbeat: {
+        main_count: mainHeartbeatCount,
+        main_maximum_gap_ms: Math.round(mainMaximumGapMs),
+        renderer_count: after.heartbeatCount,
+        renderer_maximum_gap_ms: Math.round(after.maximumHeartbeatGapMs)
+      },
+      preservation,
+      error_screenshot: {
+        filename: screenshotFilename,
+        size_bytes: screenshotBytes.byteLength,
+        sha256: sha256(screenshotBytes)
+      },
+      checks
+    }
+  } finally {
+    clearInterval(mainHeartbeat)
+    processor.dispose()
+    window.destroy()
+  }
+}
+
 async function runSmoke(reportPath: string, metricsPath: string): Promise<void> {
   if (!isAbsolute(reportPath) || !isAbsolute(metricsPath)) throw new Error('smoke_paths_must_be_absolute')
   if (await pathExists(reportPath) || await pathExists(metricsPath)) {
@@ -285,6 +457,7 @@ async function runSmoke(reportPath: string, metricsPath: string): Promise<void> 
     }
     const unconfirmedQuotaDelta = (await quota.usage()) - quotaBefore
     const securityChecks = await runSecurityDiagnostics(transport, fixtureServer.origin)
+    const stage2Harness = await runStage2PackagedHarness(dirname(reportPath))
 
     const metricsRecords = [first, second, privacy, ...unconfirmedMetrics]
     for (const metrics of metricsRecords) {
@@ -317,7 +490,8 @@ async function runSmoke(reportPath: string, metricsPath: string): Promise<void> 
       clipboard_verified: Boolean(first.hashes.clipboard && second.hashes.clipboard),
       export_verified: Boolean(first.hashes.export && second.hashes.export),
       utility_process_pool_fixed_at_two: DECODE_CONCURRENCY === 2,
-      ...securityChecks
+      ...securityChecks,
+      ...stage2Harness.checks
     }
     const passed = Object.values(checks).every(Boolean)
     const metricsBytes = await readFile(metricsPath)
@@ -348,6 +522,7 @@ async function runSmoke(reportPath: string, metricsPath: string): Promise<void> 
         search_request_count: fixtureServer.stats.searchRequests,
         image_request_count: fixtureServer.stats.imageRequests
       },
+      stage2_harness: stage2Harness,
       evidence: {
         metrics_sha256: sha256(metricsBytes),
         metrics_record_count: metricsRecords.length

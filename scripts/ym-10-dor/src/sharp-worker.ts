@@ -9,6 +9,7 @@ interface WorkerRequest {
   id: number
   inputBase64: string
   variantIndex: number
+  inputKind: 'remote' | 'local'
   diagnosticBehavior?: 'crash' | 'hang'
 }
 
@@ -24,6 +25,7 @@ parentPort.on('message', (event) => {
   const id = Number(request.id)
   if (!Number.isInteger(id) || typeof request.inputBase64 !== 'string' ||
     !Number.isInteger(request.variantIndex) ||
+    !['remote', 'local'].includes(String(request.inputKind)) ||
     (request.diagnosticBehavior !== undefined &&
       !['crash', 'hang'].includes(request.diagnosticBehavior))) {
     parentPort.postMessage({ id, ok: false, errorCode: 'invalid_worker_request' })
@@ -35,7 +37,7 @@ parentPort.on('message', (event) => {
   if (request.diagnosticBehavior === 'hang') return
 
   const input = Buffer.from(request.inputBase64, 'base64')
-  void processImageBytes(input, Number(request.variantIndex))
+  void processImageBytes(input, Number(request.variantIndex), request.inputKind)
     .then(({ png, sha256 }) => parentPort.postMessage({
       id,
       ok: true,

@@ -3,8 +3,10 @@ import type { RequestOptions } from 'node:https'
 import {
   DOWNLOAD_CONCURRENCY,
   DOWNLOAD_TIMEOUT_MS,
-  MAX_IMAGE_RESPONSE_BYTES,
+  MAX_REMOTE_IMAGE_BYTES,
+  MAX_RETRY_AFTER_MS,
   MAX_SEARCH_RESPONSE_BYTES,
+  OPENVERSE_ASSET_ID,
   OPENVERSE_ORIGIN,
   OPENVERSE_SEARCH_PATH,
   OPENVERSE_THUMBNAIL_PATH,
@@ -13,6 +15,7 @@ import {
   SEARCH_TIMEOUT_MS
 } from './constants'
 import type {
+  DetailOutcome,
   DownloadOutcome,
   OpenverseAsset,
   ProbeTransport,
@@ -22,12 +25,23 @@ import type {
 import { AsyncLimiter } from './limiter'
 
 export class ProbeNetworkError extends Error {
-  constructor(readonly code: string, readonly statusCode: number | null = null) {
+  constructor(
+    readonly code: string,
+    readonly statusCode: number | null = null,
+    readonly retryAfterMs: number | null = null,
+    readonly notBeforeMs: number | null = null,
+    readonly remainingMs: number | null = null
+  ) {
     super(code)
   }
 }
 
-interface TransportOptions {
+export interface TransportTimingOptions {
+  now?: () => number
+  maxRetryAfterMs?: number
+}
+
+interface TransportOptions extends TransportTimingOptions {
   mode: ProbeTransportMode
   origin: string
   ca?: string
@@ -47,6 +61,25 @@ const ALLOWED_IMAGE_MEDIA_TYPES = new Set<AllowedImageMediaType>([
   'image/jpeg',
   'image/webp'
 ])
+
+export function parseRetryAfterMs(
+  value: string | string[] | undefined,
+  nowMs: number,
+  maximumMs = MAX_RETRY_AFTER_MS
+): number | null {
+  if (typeof value !== 'string' || !Number.isFinite(nowMs) || maximumMs < 1) return null
+  const trimmed = value.trim()
+  let delayMs: number
+  if (/^\d+$/u.test(trimmed)) {
+    delayMs = Number(trimmed) * 1_000
+  } else {
+    const parsed = Date.parse(trimmed)
+    if (!Number.isFinite(parsed)) return null
+    delayMs = Math.max(0, parsed - nowMs)
+  }
+  if (!Number.isFinite(delayMs)) return maximumMs
+  return Math.min(maximumMs, Math.max(0, Math.ceil(delayMs)))
+}
 
 function normalizedMediaType(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
@@ -69,7 +102,9 @@ async function requestBounded(
   maximumBytes: number,
   timeoutMs: number,
   expectedResponse: ExpectedResponse,
-  ca?: string
+  ca: string | undefined,
+  now: () => number,
+  maxRetryAfterMs: number
 ): Promise<BoundedResponse> {
   const options: RequestOptions = {
     protocol: 'https:',
@@ -101,7 +136,14 @@ async function requestBounded(
       }
       if (statusCode < 200 || statusCode >= 300) {
         response.resume()
-        fail(new ProbeNetworkError('http_error', statusCode))
+        const observedAt = now()
+        const retryAfterMs = statusCode === 429
+          ? parseRetryAfterMs(response.headers['retry-after'], observedAt, maxRetryAfterMs)
+          : null
+        fail(new ProbeNetworkError(
+          'http_error', statusCode, retryAfterMs,
+          retryAfterMs === null ? null : observedAt + retryAfterMs
+        ))
         return
       }
 
@@ -168,6 +210,9 @@ class HttpsProbeTransport implements ProbeTransport {
   readonly mode: ProbeTransportMode
   private readonly origin: URL
   private readonly ca?: string
+  private readonly now: () => number
+  private readonly maxRetryAfterMs: number
+  private notBeforeMs = 0
   private readonly searchLimiter = new AsyncLimiter(SEARCH_CONCURRENCY)
   private readonly downloadLimiter = new AsyncLimiter(DOWNLOAD_CONCURRENCY)
 
@@ -175,6 +220,9 @@ class HttpsProbeTransport implements ProbeTransport {
     this.mode = options.mode
     this.origin = new URL(options.origin)
     this.ca = options.ca
+    this.now = options.now ?? Date.now
+    this.maxRetryAfterMs = options.maxRetryAfterMs ?? MAX_RETRY_AFTER_MS
+    if (this.maxRetryAfterMs < 1) throw new Error('invalid_retry_after_limit')
     if (this.origin.protocol !== 'https:' || this.origin.username || this.origin.password ||
       this.origin.search || this.origin.hash || this.origin.pathname !== '/') {
       throw new Error('invalid_transport_origin')
@@ -199,11 +247,34 @@ class HttpsProbeTransport implements ProbeTransport {
     }
   }
 
+  cooldownState(): { notBeforeMs: number; remainingMs: number } {
+    return {
+      notBeforeMs: this.notBeforeMs,
+      remainingMs: Math.max(0, this.notBeforeMs - this.now())
+    }
+  }
+
+  private assertNotCoolingDown(): void {
+    const remainingMs = Math.max(0, this.notBeforeMs - this.now())
+    if (remainingMs > 0) {
+      throw new ProbeNetworkError(
+        'rate_limit_cooldown', 429, remainingMs, this.notBeforeMs, remainingMs
+      )
+    }
+  }
+
+  private observeRateLimit(error: unknown): void {
+    if (error instanceof ProbeNetworkError && error.statusCode === 429 && error.notBeforeMs !== null) {
+      this.notBeforeMs = Math.max(this.notBeforeMs, error.notBeforeMs)
+    }
+  }
+
   search(keywords: readonly string[]): Promise<SearchOutcome> {
     return this.searchLimiter.run(async () => {
       if (keywords.length < 1 || keywords.length > 3 || keywords.some((entry) => !entry.trim())) {
         throw new ProbeNetworkError('invalid_keywords')
       }
+      this.assertNotCoolingDown()
       const url = new URL(OPENVERSE_SEARCH_PATH, this.origin)
       url.searchParams.set('q', keywords.join(' '))
       url.searchParams.set('license', 'cc0,pdm')
@@ -215,8 +286,13 @@ class HttpsProbeTransport implements ProbeTransport {
         MAX_SEARCH_RESPONSE_BYTES,
         SEARCH_TIMEOUT_MS,
         'json',
-        this.ca
-      )
+        this.ca,
+        this.now,
+        this.maxRetryAfterMs
+      ).catch((error) => {
+        this.observeRateLimit(error)
+        throw error
+      })
       let payload: unknown
       try {
         payload = JSON.parse(response.bytes.toString('utf8'))
@@ -231,18 +307,52 @@ class HttpsProbeTransport implements ProbeTransport {
     })
   }
 
+  detail(assetId: string): Promise<DetailOutcome> {
+    return this.searchLimiter.run(async () => {
+      const canonicalId = assetId.trim().toLowerCase()
+      if (!OPENVERSE_ASSET_ID.test(canonicalId)) throw new ProbeNetworkError('invalid_asset_id')
+      this.assertNotCoolingDown()
+      const url = new URL(`/v1/images/${canonicalId}/`, this.origin)
+      const response = await requestBounded(
+        url,
+        MAX_SEARCH_RESPONSE_BYTES,
+        SEARCH_TIMEOUT_MS,
+        'json',
+        this.ca,
+        this.now,
+        this.maxRetryAfterMs
+      ).catch((error) => {
+        this.observeRateLimit(error)
+        throw error
+      })
+      let payload: unknown
+      try {
+        payload = JSON.parse(response.bytes.toString('utf8'))
+      } catch {
+        throw new ProbeNetworkError('invalid_json', response.statusCode)
+      }
+      return { statusCode: response.statusCode, responseBytes: response.bytes.byteLength, payload }
+    })
+  }
+
   download(asset: OpenverseAsset): Promise<DownloadOutcome> {
     return this.downloadLimiter.run(async () => {
       if (!this.isThumbnailUrlAllowed(asset.thumbnailUrl, asset.id)) {
         throw new ProbeNetworkError('thumbnail_url_rejected')
       }
+      this.assertNotCoolingDown()
       const response = await requestBounded(
         new URL(asset.thumbnailUrl),
-        MAX_IMAGE_RESPONSE_BYTES,
+        MAX_REMOTE_IMAGE_BYTES,
         DOWNLOAD_TIMEOUT_MS,
         'image',
-        this.ca
-      )
+        this.ca,
+        this.now,
+        this.maxRetryAfterMs
+      ).catch((error) => {
+        this.observeRateLimit(error)
+        throw error
+      })
       return {
         bytes: response.bytes,
         statusCode: response.statusCode,
@@ -252,10 +362,14 @@ class HttpsProbeTransport implements ProbeTransport {
   }
 }
 
-export function createOpenverseTransport(): ProbeTransport {
-  return new HttpsProbeTransport({ mode: 'openverse', origin: OPENVERSE_ORIGIN })
+export function createOpenverseTransport(options: TransportTimingOptions = {}): ProbeTransport {
+  return new HttpsProbeTransport({ mode: 'openverse', origin: OPENVERSE_ORIGIN, ...options })
 }
 
-export function createFixtureTransport(origin: string, ca: string): ProbeTransport {
-  return new HttpsProbeTransport({ mode: 'fixture', origin, ca })
+export function createFixtureTransport(
+  origin: string,
+  ca: string,
+  options: TransportTimingOptions = {}
+): ProbeTransport {
+  return new HttpsProbeTransport({ mode: 'fixture', origin, ca, ...options })
 }

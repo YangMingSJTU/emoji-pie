@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { ProbeImageProcessor, ProcessedImage } from './contracts'
 
 export interface ProbeWorkerProcess {
+  readonly pid?: number
   postMessage(message: unknown): void
   kill(): unknown
   on(event: 'message', listener: (message: unknown) => void): unknown
@@ -12,6 +13,7 @@ interface WorkerRequest {
   id: number
   inputBase64: string
   variantIndex: number
+  inputKind: 'remote' | 'local'
   diagnosticBehavior?: 'crash' | 'hang'
 }
 
@@ -27,6 +29,7 @@ interface PendingJob {
   id: number
   input: Buffer
   variantIndex: number
+  inputKind: 'remote' | 'local'
   diagnosticBehavior?: 'crash' | 'hang'
   resolve: (value: ProcessedImage) => void
   reject: (error: Error) => void
@@ -64,11 +67,29 @@ export class ResilientImageWorkerPool implements ProbeImageProcessor {
   }
 
   process(input: Buffer, variantIndex: number): Promise<ProcessedImage> {
-    return this.enqueue(input, variantIndex)
+    return this.enqueue(input, variantIndex, 'remote')
+  }
+
+  processLocal(input: Buffer, variantIndex: number): Promise<ProcessedImage> {
+    return this.enqueue(input, variantIndex, 'local')
   }
 
   runDiagnostic(behavior: 'crash' | 'hang'): Promise<ProcessedImage> {
-    return this.enqueue(Buffer.alloc(0), 0, behavior)
+    return this.enqueue(Buffer.alloc(0), 0, 'remote', behavior)
+  }
+
+  activeWorkerPids(): number[] {
+    return this.slots
+      .map(({ child }) => child.pid)
+      .filter((pid): pid is number => typeof pid === 'number' && Number.isInteger(pid) && pid > 0)
+  }
+
+  terminateBusyWorker(): number | null {
+    const slot = this.slots.find((candidate) => candidate.job !== null)
+    if (!slot) return null
+    const pid = slot.child.pid ?? null
+    slot.child.kill()
+    return pid
   }
 
   dispose(): void {
@@ -84,6 +105,7 @@ export class ResilientImageWorkerPool implements ProbeImageProcessor {
   private enqueue(
     input: Buffer,
     variantIndex: number,
+    inputKind: 'remote' | 'local',
     diagnosticBehavior?: 'crash' | 'hang'
   ): Promise<ProcessedImage> {
     if (this.disposed) return Promise.reject(new Error('worker_pool_disposed'))
@@ -92,6 +114,7 @@ export class ResilientImageWorkerPool implements ProbeImageProcessor {
         id: this.nextId++,
         input,
         variantIndex,
+        inputKind,
         diagnosticBehavior,
         resolve,
         reject
@@ -170,6 +193,7 @@ export class ResilientImageWorkerPool implements ProbeImageProcessor {
         id: job.id,
         inputBase64: job.input.toString('base64'),
         variantIndex: job.variantIndex,
+        inputKind: job.inputKind,
         diagnosticBehavior: job.diagnosticBehavior
       }
       try {

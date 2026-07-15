@@ -117,6 +117,10 @@ export async function startFixtureServer(fixturesDirectory: string): Promise<Run
     }
     if (url.pathname === '/v1/images/') {
       stats.searchRequests += 1
+      if (url.searchParams.get('q') === 'rate-limit-delta') {
+        response.writeHead(429, { 'retry-after': '2' }).end()
+        return
+      }
       if (url.searchParams.get('q') === 'redirect-fixture') {
         response.writeHead(302, { location: `${origin}/v1/images/` }).end()
         return
