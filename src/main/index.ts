@@ -85,6 +85,16 @@ function parseImage(dataUrl: string): Electron.NativeImage {
   return image
 }
 
+function isInlineEmojiValue(value: unknown): value is string {
+  if (typeof value !== 'string' || value.trim() !== value) return false
+  const codePoints = [...value]
+  return (
+    codePoints.length >= 1 &&
+    codePoints.length <= 2 &&
+    codePoints.every((codePoint) => /^\p{Emoji_Presentation}$/u.test(codePoint))
+  )
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.libraryList, (_event, filter: LibraryFilter = 'all') => {
     return requireRepository().list(filter === 'favorites' ? 'favorites' : 'all')
@@ -114,6 +124,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.clipboardWriteImage, (_event, dataUrl: unknown) => {
     if (typeof dataUrl !== 'string') throw new Error('图片数据无效')
     clipboard.writeImage(parseImage(dataUrl))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.clipboardWriteText, (_event, value: unknown) => {
+    if (!isInlineEmojiValue(value)) throw new Error('行内 Emoji 数据无效')
+    clipboard.writeText(value)
   })
 
   ipcMain.handle(

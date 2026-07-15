@@ -5,6 +5,7 @@ export const IPC_CHANNELS = {
   libraryDelete: 'library:delete',
   libraryClearHistory: 'library:clear-history',
   clipboardWriteImage: 'clipboard:write-image',
+  clipboardWriteText: 'clipboard:write-text',
   dialogSaveImage: 'dialog:save-image',
   appGetInfo: 'app:get-info',
   renderSettingsGet: 'render-settings:get',

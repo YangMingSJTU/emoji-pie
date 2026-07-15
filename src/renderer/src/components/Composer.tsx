@@ -44,6 +44,12 @@ export function Composer({
   onRandomPrompt
 }: ComposerProps): React.JSX.Element {
   const suggestions = PROMPT_SUGGESTIONS[mode]
+  const inlineOutput = renderSettings.outputType === 'inline'
+  const generateLabel = inlineOutput
+    ? '生成 Emoji'
+    : renderSettings.layout === 'compact'
+      ? '生成贴纸'
+      : '生成海报'
 
   return (
     <section className="composer" aria-label="表情生成器">
@@ -106,25 +112,43 @@ export function Composer({
       </div>
 
       <div className="render-options">
-        <div className="render-layout-field">
-          <span>画面版式</span>
-          <div className="render-layout-control" role="radiogroup" aria-label="画面版式">
+        <div className="output-format-field">
+          <span>输出形式</span>
+          <div className="output-format-control" role="radiogroup" aria-label="输出形式">
             <button
               type="button"
               role="radio"
-              aria-checked={renderSettings.layout === 'compact'}
-              className={renderSettings.layout === 'compact' ? 'is-active' : ''}
-              onClick={() => onRenderSettingsChange({ ...renderSettings, layout: 'compact' })}
+              aria-checked={inlineOutput}
+              className={inlineOutput ? 'is-active' : ''}
+              onClick={() => onRenderSettingsChange({ ...renderSettings, outputType: 'inline' })}
             >
-              <Smile size={15} />
-              小黄脸
+              <Type size={15} />
+              行内 Emoji
             </button>
             <button
               type="button"
               role="radio"
-              aria-checked={renderSettings.layout === 'poster'}
-              className={renderSettings.layout === 'poster' ? 'is-active' : ''}
-              onClick={() => onRenderSettingsChange({ ...renderSettings, layout: 'poster' })}
+              aria-checked={!inlineOutput && renderSettings.layout === 'compact'}
+              className={!inlineOutput && renderSettings.layout === 'compact' ? 'is-active' : ''}
+              onClick={() => onRenderSettingsChange({
+                ...renderSettings,
+                outputType: 'image',
+                layout: 'compact'
+              })}
+            >
+              <Smile size={15} />
+              黄脸贴纸
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!inlineOutput && renderSettings.layout === 'poster'}
+              className={!inlineOutput && renderSettings.layout === 'poster' ? 'is-active' : ''}
+              onClick={() => onRenderSettingsChange({
+                ...renderSettings,
+                outputType: 'image',
+                layout: 'poster'
+              })}
             >
               <ImageIcon size={15} />
               表情海报
@@ -132,30 +156,51 @@ export function Composer({
           </div>
         </div>
 
-        <label className="caption-render-switch">
-          <span>
-            <Type size={15} />
-            图片内文字
-          </span>
-          <input
-            type="checkbox"
-            checked={renderSettings.embedCaption}
-            onChange={(event) => onRenderSettingsChange({
-              ...renderSettings,
-              embedCaption: event.target.checked
-            })}
-            aria-label="图片内文字"
-          />
-          <i aria-hidden="true" />
-        </label>
+        {!inlineOutput && (
+          <label className="caption-render-switch">
+            <span>
+              <Type size={15} />
+              图片内文字
+            </span>
+            <input
+              type="checkbox"
+              checked={renderSettings.embedCaption}
+              onChange={(event) => onRenderSettingsChange({
+                ...renderSettings,
+                embedCaption: event.target.checked
+              })}
+              aria-label="图片内文字"
+            />
+            <i aria-hidden="true" />
+          </label>
+        )}
       </div>
 
-      <div className="composer-footer">
-        <EffectPicker
-          value={style}
-          renderSettings={renderSettings}
-          onChange={onStyleChange}
-        />
+      <div className={`composer-footer ${inlineOutput ? 'is-inline-output' : ''}`}>
+        {inlineOutput ? (
+          <div className="inline-output-preview" aria-label="行内 Emoji 输出预览">
+            <span className="inline-output-preview-icon" aria-hidden="true">
+              <Type size={17} />
+            </span>
+            <div>
+              <strong>Unicode Emoji</strong>
+              <small>5 个候选</small>
+            </div>
+            <div className="inline-output-preview-glyphs" aria-hidden="true">
+              <span>🙂</span>
+              <span>😄</span>
+              <span>😮</span>
+              <span>😑</span>
+              <span>😭</span>
+            </div>
+          </div>
+        ) : (
+          <EffectPicker
+            value={style}
+            renderSettings={renderSettings}
+            onChange={onStyleChange}
+          />
+        )}
 
         <button
           type="button"
@@ -168,7 +213,7 @@ export function Composer({
           ) : (
             <Sparkles size={19} />
           )}
-          {generating ? '正在创作' : '生成一组'}
+          {generating ? '正在创作' : generateLabel}
         </button>
       </div>
     </section>

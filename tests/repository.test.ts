@@ -38,11 +38,22 @@ describe('emoji render settings', () => {
 
   it('defaults to a compact image without embedded text', () => {
     expect(DEFAULT_EMOJI_RENDER_SETTINGS).toEqual({
+      outputType: 'image',
       layout: 'compact',
       embedCaption: false
     })
     expect(normalizeEmojiRenderSettings(undefined)).toEqual(DEFAULT_EMOJI_RENDER_SETTINGS)
     expect(normalizeEmojiRenderSettings({ layout: 'poster', embedCaption: true })).toEqual({
+      outputType: 'image',
+      layout: 'poster',
+      embedCaption: true
+    })
+    expect(normalizeEmojiRenderSettings({
+      outputType: 'inline',
+      layout: 'poster',
+      embedCaption: true
+    })).toEqual({
+      outputType: 'inline',
       layout: 'poster',
       embedCaption: true
     })

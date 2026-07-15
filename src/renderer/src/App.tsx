@@ -6,6 +6,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Type,
   WandSparkles
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -23,12 +24,17 @@ import {
 } from '../../shared/types'
 import { Composer } from './components/Composer'
 import { EmojiGrid } from './components/EmojiGrid'
+import { InlineEmojiTray } from './components/InlineEmojiTray'
 import { AgentRuntimeView } from './components/AgentRuntimeView'
 import { Brand, Sidebar, type PageId } from './components/Sidebar'
 import { Toast, type ToastKind, type ToastState } from './components/Toast'
 import { PROMPT_SUGGESTIONS, SCENE_LABELS } from './config'
 import { desktopApi } from './lib/desktop-api'
 import { renderEmoji } from './lib/emoji-renderer'
+import {
+  createInlineEmojiSuggestions,
+  type InlineEmojiSuggestion
+} from './lib/inline-emoji'
 import {
   analyzeText,
   createGenerationSpecs,
@@ -41,6 +47,8 @@ const DEMOS: Array<{ prompt: string; mode: GenerationMode; style: EmojiStyle }> 
   { prompt: '好耶，终于下班了', mode: 'express', style: 'cute' },
   { prompt: '这个需求很简单', mode: 'reply', style: 'chaos' }
 ]
+
+const IMAGE_RESULT_COUNT = 9
 
 interface GenerationSnapshot {
   prompt: string
@@ -94,6 +102,7 @@ export default function App(): React.JSX.Element {
   const [mode, setMode] = useState<GenerationMode>('express')
   const [style, setStyle] = useState<EmojiStyleSelection>('smart')
   const [results, setResults] = useState<EmojiRecord[]>([])
+  const [inlineEmojis, setInlineEmojis] = useState<InlineEmojiSuggestion[]>([])
   const [library, setLibrary] = useState<EmojiRecord[]>([])
   const [analysis, setAnalysis] = useState<TextAnalysis | null>(null)
   const [activePrompt, setActivePrompt] = useState('')
@@ -110,6 +119,8 @@ export default function App(): React.JSX.Element {
   const [analysisSource, setAnalysisSource] = useState('本地规则')
   const [toast, setToast] = useState<ToastState | null>(null)
   const mainRef = useRef<HTMLElement>(null)
+  const resultRef = useRef<HTMLElement>(null)
+  const revealResultsRef = useRef(false)
   const busyRef = useRef(false)
   const activeBatchRef = useRef<GenerationSnapshot | null>(null)
 
@@ -117,12 +128,31 @@ export default function App(): React.JSX.Element {
     setToast({ id: Date.now(), message, kind })
   }, [])
 
-  const updateRenderSettings = useCallback((settings: EmojiRenderSettings): void => {
-    setRenderSettings(settings)
-    void desktopApi.renderSettings.save(settings).catch(() => {
-      showToast('画面设置保存失败', 'error')
-    })
-  }, [showToast])
+  const updateRenderSettings = useCallback(
+    (settings: EmojiRenderSettings): void => {
+      const outputFormatChanged =
+        settings.outputType !== renderSettings.outputType ||
+        (
+          settings.outputType === 'image' &&
+          renderSettings.outputType === 'image' &&
+          settings.layout !== renderSettings.layout
+        )
+      if (outputFormatChanged) {
+        setResults([])
+        setInlineEmojis([])
+        setAnalysis(null)
+        setActivePrompt('')
+        setToast(null)
+        activeBatchRef.current = null
+        mainRef.current?.scrollTo({ top: 0 })
+      }
+      setRenderSettings(settings)
+      void desktopApi.renderSettings.save(settings).catch(() => {
+        showToast('输出设置保存失败', 'error')
+      })
+    },
+    [renderSettings.layout, renderSettings.outputType, showToast]
+  )
 
   useEffect(() => {
     let active = true
@@ -149,12 +179,29 @@ export default function App(): React.JSX.Element {
   }, [showToast])
 
   const demos = useMemo(() => makeDemos(renderSettings), [renderSettings])
+  const inlineDemos = useMemo(() => {
+    const demoPrompt = '今天状态不错'
+    const demoAnalysis = analyzeText(demoPrompt, 'express')
+    return createInlineEmojiSuggestions(demoPrompt, 'express', demoAnalysis, 100)
+  }, [])
 
   useEffect(() => {
     if (!toast) return
     const timer = window.setTimeout(() => setToast(null), 2400)
     return () => window.clearTimeout(timer)
   }, [toast])
+
+  useEffect(() => {
+    if (
+      !revealResultsRef.current ||
+      (results.length === 0 && inlineEmojis.length === 0)
+    ) return
+    revealResultsRef.current = false
+    const frame = window.requestAnimationFrame(() => {
+      resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [inlineEmojis, results])
 
   const generate = useCallback(
     async (snapshot?: GenerationSnapshot, refresh = false): Promise<void> => {
@@ -200,23 +247,46 @@ export default function App(): React.JSX.Element {
         const nextAnalysis = overrides?.analysis ?? analyzeText(normalizedPrompt, request.mode)
         overrides = { ...overrides, analysis: nextAnalysis }
         const batchRenderSettings = { ...request.renderSettings }
-        const count = 9
-        const records = specsToRecords(
-          normalizedPrompt,
-          request.mode,
-          request.style,
-          count,
-          0,
-          Date.now(),
-          batchRenderSettings,
-          overrides
-        )
-        await desktopApi.library.save(records)
-        setResults(records)
-        setLibrary((current) => {
-          const ids = new Set(records.map((record) => record.id))
-          return [...records, ...current.filter((record) => !ids.has(record.id))].slice(0, 240)
-        })
+        const generationNonce = Date.now()
+        const inlineOutput = batchRenderSettings.outputType === 'inline'
+        let successMessage: string
+
+        if (inlineOutput) {
+          const suggestions = createInlineEmojiSuggestions(
+            normalizedPrompt,
+            request.mode,
+            nextAnalysis,
+            generationNonce
+          )
+          revealResultsRef.current = true
+          setResults([])
+          setInlineEmojis(suggestions)
+          successMessage = refresh
+            ? '已换一批行内 Emoji'
+            : `已生成 ${suggestions.length} 个行内 Emoji`
+        } else {
+          const records = specsToRecords(
+            normalizedPrompt,
+            request.mode,
+            request.style,
+            IMAGE_RESULT_COUNT,
+            0,
+            generationNonce,
+            batchRenderSettings,
+            overrides
+          )
+          await desktopApi.library.save(records)
+          revealResultsRef.current = true
+          setInlineEmojis([])
+          setResults(records)
+          setLibrary((current) => {
+            const ids = new Set(records.map((record) => record.id))
+            return [...records, ...current.filter((record) => !ids.has(record.id))].slice(0, 240)
+          })
+          successMessage = refresh
+            ? '已换一批表情图片'
+            : `已生成 ${records.length} 张表情图片`
+        }
         setAnalysis(nextAnalysis)
         setAnalysisSource(source)
         setActivePrompt(normalizedPrompt)
@@ -229,9 +299,7 @@ export default function App(): React.JSX.Element {
         showToast(
           usedFallback
             ? 'AI 运行时暂不可用，已使用规则生成'
-            : refresh
-              ? '已换一批候选'
-              : `已生成 ${count} 张新表情`,
+            : successMessage,
           usedFallback ? 'info' : 'success'
         )
       } catch (error) {
@@ -277,9 +345,21 @@ export default function App(): React.JSX.Element {
     async (record: EmojiRecord): Promise<void> => {
       try {
         await desktopApi.clipboard.writeImage(record.dataUrl)
-        showToast('PNG 已复制，可以去聊天窗口粘贴了')
+        showToast('贴纸 PNG 已复制，可以去聊天窗口粘贴了')
       } catch {
         showToast('图片复制失败，请使用保存按钮', 'error')
+      }
+    },
+    [showToast]
+  )
+
+  const handleInlineEmojiCopy = useCallback(
+    async (suggestion: InlineEmojiSuggestion): Promise<void> => {
+      try {
+        await desktopApi.clipboard.writeText(suggestion.value)
+        showToast(`${suggestion.value} 已复制为行内 Emoji`)
+      } catch {
+        showToast('行内 Emoji 复制失败', 'error')
       }
     },
     [showToast]
@@ -315,7 +395,11 @@ export default function App(): React.JSX.Element {
     setPrompt(record.prompt)
     setMode(record.mode)
     setStyle(record.style)
-    updateRenderSettings({ layout: record.layout, embedCaption: record.embedCaption })
+    updateRenderSettings({
+      outputType: 'image',
+      layout: record.layout,
+      embedCaption: record.embedCaption
+    })
     setPage('create')
     window.setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 0)
   }, [updateRenderSettings])
@@ -348,6 +432,7 @@ export default function App(): React.JSX.Element {
         record.caption.toLocaleLowerCase().includes(query)
     )
   }, [library, page, searchQuery])
+  const hasGenerationResults = results.length > 0 || inlineEmojis.length > 0
 
   return (
     <div className="app-shell">
@@ -388,7 +473,7 @@ export default function App(): React.JSX.Element {
                   新建表情
                 </span>
                 <h1>把这句话做成表情</h1>
-                <p>输入情绪或聊天内容，立即得到一组可以直接发送的黄脸表情。</p>
+                <p>一句话，生成适合聊天发送的 Emoji 或原创图片表情。</p>
               </div>
             </div>
 
@@ -406,8 +491,8 @@ export default function App(): React.JSX.Element {
               onRandomPrompt={randomPrompt}
             />
 
-            {results.length > 0 ? (
-              <section className="result-section" aria-label="生成结果">
+            {hasGenerationResults ? (
+              <section ref={resultRef} className="result-section" aria-label="生成结果">
                 <div className="section-heading result-heading">
                   <div>
                     <h2>为“{activePrompt}”生成</h2>
@@ -423,7 +508,11 @@ export default function App(): React.JSX.Element {
                     </div>
                   </div>
                   <div className="result-heading-actions">
-                    <small>{results.length} 张候选</small>
+                    <small>
+                      {inlineEmojis.length > 0
+                        ? `${inlineEmojis.length} 个行内 Emoji`
+                        : `${results.length} 张${results[0]?.layout === 'poster' ? '海报' : '贴纸'}`}
+                    </small>
                     <button
                       type="button"
                       className="refresh-results-button"
@@ -438,11 +527,31 @@ export default function App(): React.JSX.Element {
                     </button>
                   </div>
                 </div>
-                <EmojiGrid
-                  records={results}
-                  onCopy={handleCopy}
-                  onDownload={handleDownload}
-                  onFavorite={handleFavorite}
+                {inlineEmojis.length > 0 ? (
+                  <InlineEmojiTray
+                    suggestions={inlineEmojis}
+                    onCopy={(suggestion) => void handleInlineEmojiCopy(suggestion)}
+                  />
+                ) : (
+                  <EmojiGrid
+                    records={results}
+                    onCopy={handleCopy}
+                    onDownload={handleDownload}
+                    onFavorite={handleFavorite}
+                  />
+                )}
+              </section>
+            ) : renderSettings.outputType === 'inline' ? (
+              <section className="inspiration-section" aria-label="行内 Emoji 示例">
+                <div className="section-heading">
+                  <div>
+                    <h2>行内 Emoji 示例</h2>
+                  </div>
+                  <Type size={20} />
+                </div>
+                <InlineEmojiTray
+                  suggestions={inlineDemos}
+                  onCopy={(suggestion) => void handleInlineEmojiCopy(suggestion)}
                 />
               </section>
             ) : (

@@ -114,6 +114,10 @@ const browserApi: DesktopApi = {
         throw new Error('浏览器不支持图片剪贴板')
       }
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+    },
+    async writeText(value) {
+      if (!navigator.clipboard) throw new Error('浏览器不支持文本剪贴板')
+      await navigator.clipboard.writeText(value)
     }
   },
   dialog: {

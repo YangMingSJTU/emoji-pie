@@ -715,10 +715,10 @@ function renderCompactEmoji(spec: EmojiSpec, embedCaption: boolean): string {
   const palette = PALETTES[spec.style]
   drawFaceArtwork(sourceContext, spec, palette, new Random(spec.seed), true)
 
-  const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 256
-  const context = canvas.getContext('2d')
+  const compositionCanvas = document.createElement('canvas')
+  compositionCanvas.width = 256
+  compositionCanvas.height = 256
+  const context = compositionCanvas.getContext('2d')
   if (!context) throw new Error('当前环境不支持 Canvas 2D')
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = 'high'
@@ -728,7 +728,16 @@ function renderCompactEmoji(spec: EmojiSpec, embedCaption: boolean): string {
   } else {
     context.drawImage(sourceCanvas, 95, 45, 450, 450, 8, 8, 240, 240)
   }
-  return canvas.toDataURL('image/png')
+
+  const outputCanvas = document.createElement('canvas')
+  outputCanvas.width = 128
+  outputCanvas.height = 128
+  const outputContext = outputCanvas.getContext('2d')
+  if (!outputContext) throw new Error('当前环境不支持 Canvas 2D')
+  outputContext.imageSmoothingEnabled = true
+  outputContext.imageSmoothingQuality = 'high'
+  outputContext.drawImage(compositionCanvas, 0, 0, 128, 128)
+  return outputCanvas.toDataURL('image/png')
 }
 
 export function renderEmoji(

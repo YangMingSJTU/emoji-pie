@@ -20,12 +20,16 @@ export function isEmojiStyle(value: unknown): value is EmojiStyle {
 
 export type EmojiLayout = 'compact' | 'poster'
 
+export type EmojiOutputType = 'inline' | 'image'
+
 export interface EmojiRenderSettings {
+  outputType: EmojiOutputType
   layout: EmojiLayout
   embedCaption: boolean
 }
 
 export const DEFAULT_EMOJI_RENDER_SETTINGS: EmojiRenderSettings = {
+  outputType: 'image',
   layout: 'compact',
   embedCaption: false
 }
@@ -35,6 +39,7 @@ export function normalizeEmojiRenderSettings(value: unknown): EmojiRenderSetting
     ? value as Partial<EmojiRenderSettings>
     : {}
   return {
+    outputType: candidate.outputType === 'inline' ? 'inline' : 'image',
     layout: candidate.layout === 'poster' ? 'poster' : 'compact',
     embedCaption: candidate.embedCaption === true
   }
@@ -176,6 +181,7 @@ export interface DesktopApi {
   }
   clipboard: {
     writeImage: (dataUrl: string) => Promise<void>
+    writeText: (value: string) => Promise<void>
   }
   dialog: {
     saveImage: (dataUrl: string, suggestedName: string) => Promise<boolean>

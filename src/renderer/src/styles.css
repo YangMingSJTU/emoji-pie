@@ -516,21 +516,21 @@ h1 {
   border-top: 1px solid var(--border);
 }
 
-.render-layout-field {
+.output-format-field {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 10px;
 }
 
-.render-layout-field > span {
+.output-format-field > span {
   flex: 0 0 auto;
   color: var(--ink-muted);
   font-size: 10px;
   font-weight: 700;
 }
 
-.render-layout-control {
+.output-format-control {
   display: flex;
   min-width: 0;
   padding: 3px;
@@ -540,7 +540,7 @@ h1 {
   border-radius: 7px;
 }
 
-.render-layout-control button {
+.output-format-control button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -556,11 +556,11 @@ h1 {
   white-space: nowrap;
 }
 
-.render-layout-control button:hover {
+.output-format-control button:hover {
   color: var(--ink);
 }
 
-.render-layout-control button.is-active {
+.output-format-control button.is-active {
   color: var(--ink);
   background: var(--surface);
   border-color: rgba(203, 196, 181, 0.7);
@@ -812,6 +812,71 @@ h1 {
   transition: transform 130ms ease, box-shadow 130ms ease, background-color 130ms ease;
 }
 
+.composer-footer.is-inline-output {
+  align-items: center;
+  margin-top: 14px;
+}
+
+.inline-output-preview {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.inline-output-preview-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  color: #366b55;
+  background: #e5f2ea;
+  border: 1px solid #bdd9ca;
+  border-radius: 6px;
+}
+
+.inline-output-preview > div:not(.inline-output-preview-glyphs) {
+  display: flex;
+  min-width: 96px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inline-output-preview strong {
+  font-size: 11px;
+  font-weight: 740;
+}
+
+.inline-output-preview small {
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.inline-output-preview-glyphs {
+  display: flex;
+  min-width: 0;
+  margin-left: 6px;
+  gap: 6px;
+}
+
+.inline-output-preview-glyphs span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  background: #faf8f2;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  font-size: 19px;
+}
+
 .generate-button:hover:not(:disabled) {
   background: #ffd660;
   transform: translate(-1px, -1px);
@@ -949,6 +1014,113 @@ h1 {
   white-space: nowrap;
 }
 
+.inline-emoji-strip {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  align-items: center;
+  margin-bottom: 14px;
+  padding: 10px 0;
+  gap: 13px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.inline-emoji-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-emoji-title > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  color: #366b55;
+  background: #e5f2ea;
+  border: 1px solid #bdd9ca;
+  border-radius: 6px;
+}
+
+.inline-emoji-title > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inline-emoji-title strong {
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.inline-emoji-title small {
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.inline-emoji-options {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(90px, 1fr));
+  gap: 7px;
+}
+
+.inline-emoji-options button {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr) 14px;
+  align-items: center;
+  min-width: 0;
+  min-height: 46px;
+  padding: 0 9px;
+  gap: 7px;
+  color: var(--ink-muted);
+  background: #faf8f2;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  text-align: left;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.inline-emoji-options button:hover {
+  color: var(--ink);
+  background: #fff8dc;
+  border-color: #d8ad2f;
+  box-shadow: 0 3px 10px rgba(59, 52, 37, 0.07);
+}
+
+.inline-emoji-options button > svg {
+  opacity: 0.45;
+}
+
+.inline-emoji-options button:hover > svg {
+  opacity: 0.8;
+}
+
+.inline-emoji-glyph {
+  overflow: hidden;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.inline-emoji-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .emoji-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -1001,12 +1173,16 @@ h1 {
 }
 
 .emoji-card.layout-compact .emoji-preview-button {
+  display: grid;
+  place-items: center;
   background: #f1eee6;
 }
 
 .emoji-card.layout-compact .emoji-preview-button img {
+  width: min(128px, calc(100% - 28px));
+  height: min(128px, calc(100% - 28px));
   object-fit: contain;
-  padding: 20px;
+  padding: 0;
 }
 
 .emoji-card.layout-compact:hover .emoji-preview-button img {
@@ -1861,6 +2037,14 @@ h1 {
     width: 118px;
   }
 
+  .inline-emoji-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .inline-emoji-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .composer-footer {
     align-items: stretch;
     flex-direction: column;
@@ -1876,16 +2060,16 @@ h1 {
     gap: 9px;
   }
 
-  .render-layout-field,
+  .output-format-field,
   .caption-render-switch {
     justify-content: space-between;
   }
 
-  .render-layout-control {
+  .output-format-control {
     flex: 1;
   }
 
-  .render-layout-control button {
+  .output-format-control button {
     flex: 1;
   }
 

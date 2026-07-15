@@ -12,7 +12,8 @@ const api: DesktopApi = {
     clearHistory: () => ipcRenderer.invoke(IPC_CHANNELS.libraryClearHistory)
   },
   clipboard: {
-    writeImage: (dataUrl) => ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, dataUrl)
+    writeImage: (dataUrl) => ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteImage, dataUrl),
+    writeText: (value) => ipcRenderer.invoke(IPC_CHANNELS.clipboardWriteText, value)
   },
   dialog: {
     saveImage: (dataUrl, suggestedName) =>

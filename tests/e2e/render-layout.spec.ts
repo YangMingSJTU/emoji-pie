@@ -59,15 +59,16 @@ async function readImageMetrics(image: Locator): Promise<ImageMetrics> {
   })
 }
 
-async function generate(page: Page): Promise<void> {
-  const button = page.getByRole('button', { name: '生成一组' })
+async function generateImage(page: Page): Promise<void> {
+  const button = page.getByRole('button', { name: /生成(?:贴纸|海报)/ })
+  const buttonName = (await button.innerText()).trim()
   await button.click()
   await expect(page.getByRole('button', { name: '正在创作' })).toBeVisible()
-  await expect(page.getByRole('button', { name: '生成一组' })).toBeVisible()
+  await expect(page.getByRole('button', { name: buttonName })).toBeVisible()
   await expect.poll(() => page.getByTestId('emoji-card').count()).toBeGreaterThanOrEqual(9)
 }
 
-test('renders, persists and restores compact and poster layouts', async () => {
+test('renders, persists and restores output forms and image layouts', async () => {
   const testInfo = test.info()
   const userDataPath = testInfo.outputPath('user-data')
   mkdirSync(userDataPath, { recursive: true })
@@ -84,7 +85,9 @@ test('renders, persists and restores compact and poster layouts', async () => {
     const page = await electronApp.firstWindow()
     await page.setViewportSize({ width: 1320, height: 860 })
     await expect(page.getByRole('heading', { name: '把这句话做成表情' })).toBeVisible()
-    await expect(page.getByRole('radio', { name: '小黄脸' })).toBeChecked()
+    await expect(page.getByRole('radiogroup', { name: '输出形式' }).getByRole('radio'))
+      .toHaveCount(3)
+    await expect(page.getByRole('radio', { name: '黄脸贴纸' })).toBeChecked()
     await expect(page.getByLabel('图片内文字')).not.toBeChecked()
     const initialEffectPreviewBox = await page.getByTestId('effect-preview-art').boundingBox()
     expect(initialEffectPreviewBox?.width).toBeGreaterThanOrEqual(128)
@@ -92,30 +95,64 @@ test('renders, persists and restores compact and poster layouts', async () => {
 
     await page.getByLabel('表情文案').fill('今天又要加班')
     await page.getByRole('radio', { name: '社畜打工' }).click()
-    await generate(page)
+    await generateImage(page)
 
     const compactCard = page.getByTestId('emoji-card').first()
     await expect(compactCard).toHaveAttribute('data-layout', 'compact')
     const compactMetrics = await readImageMetrics(compactCard.locator('img'))
     expect(compactMetrics).toMatchObject({
-      width: 256,
-      height: 256,
+      width: 128,
+      height: 128,
       cornerAlpha: [0, 0, 0, 0]
     })
     expect(compactMetrics.centerAlpha).toBeGreaterThan(200)
     expect(compactMetrics.lowerOpaquePixels).toBe(0)
+    const compactImageBox = await compactCard.locator('img').boundingBox()
+    expect(compactImageBox?.width).toBeLessThanOrEqual(128.1)
+    expect(compactImageBox?.height).toBeLessThanOrEqual(128.1)
     await page.screenshot({ path: testInfo.outputPath('compact-no-caption.png'), fullPage: true })
 
+    await page.setViewportSize({ width: 960, height: 640 })
+    await page.getByRole('radio', { name: '行内 Emoji' }).click()
+    await expect(page.getByRole('radio', { name: '行内 Emoji' })).toBeChecked()
+    await expect(page.getByLabel('图片内文字')).toBeHidden()
+    await expect(page.getByRole('radiogroup', { name: '表情效果' })).toBeHidden()
+    await expect(page.getByLabel('行内 Emoji 输出预览')).toBeVisible()
+    await expect(page.getByTestId('emoji-card')).toHaveCount(0)
+    await expect(page.getByRole('region', { name: '行内 Emoji' }).getByRole('button'))
+      .toHaveCount(5)
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth <= globalThis.innerWidth
+    )).toBe(true)
+    await page.screenshot({ path: testInfo.outputPath('inline-output-compact-window.png'), fullPage: true })
+
+    await expect.poll(async () => page.evaluate(async () => {
+      const api = (globalThis as typeof globalThis & { emojiPie: DesktopApi }).emojiPie
+      return (await api.renderSettings.get()).outputType
+    })).toBe('inline')
+    await page.reload()
+    await expect(page.getByRole('radio', { name: '行内 Emoji' })).toBeChecked()
+    await expect(page.getByLabel('图片内文字')).toBeHidden()
+    await expect(page.getByRole('radiogroup', { name: '表情效果' })).toBeHidden()
+
+    await page.getByRole('radio', { name: '黄脸贴纸' }).click()
+    await expect(page.getByLabel('图片内文字')).not.toBeChecked()
+    await page.getByLabel('表情文案').fill('今天又要加班')
+    await page.getByRole('radio', { name: '社畜打工' }).click()
+    await page.setViewportSize({ width: 1320, height: 860 })
+
     await page.getByLabel('图片内文字').check()
-    await generate(page)
+    await generateImage(page)
     const captionMetrics = await readImageMetrics(page.getByTestId('emoji-card').first().locator('img'))
-    expect(captionMetrics.width).toBe(256)
+    expect(captionMetrics.width).toBe(128)
     expect(captionMetrics.cornerAlpha).toEqual([0, 0, 0, 0])
     expect(captionMetrics.captionBandOpaquePixels).toBeGreaterThan(100)
     await page.screenshot({ path: testInfo.outputPath('compact-with-caption.png'), fullPage: true })
 
     await page.getByRole('radio', { name: '表情海报' }).click()
-    await generate(page)
+    await expect(page.getByRole('region', { name: '生成结果' })).toHaveCount(0)
+    await expect(page.getByTestId('emoji-card')).toHaveCount(4)
+    await generateImage(page)
     const posterMetrics = await readImageMetrics(page.getByTestId('emoji-card').first().locator('img'))
     expect(posterMetrics).toMatchObject({
       width: 640,
@@ -124,7 +161,7 @@ test('renders, persists and restores compact and poster layouts', async () => {
     })
 
     await page.getByLabel('图片内文字').uncheck()
-    await generate(page)
+    await generateImage(page)
     const latest = await page.evaluate(async () => {
       const api = (globalThis as typeof globalThis & { emojiPie: DesktopApi }).emojiPie
       return (await api.library.list())[0]
@@ -135,9 +172,10 @@ test('renders, persists and restores compact and poster layouts', async () => {
     await page.reload()
     await expect(page.getByRole('heading', { name: '把这句话做成表情' })).toBeVisible()
     await expect(page.getByRole('radio', { name: '表情海报' })).toBeChecked()
+    await expect(page.getByRole('radio', { name: '行内 Emoji' })).not.toBeChecked()
     await expect(page.getByLabel('图片内文字')).not.toBeChecked()
 
-    await page.getByRole('radio', { name: '小黄脸' }).click()
+    await page.getByRole('radio', { name: '黄脸贴纸' }).click()
     await page.getByLabel('图片内文字').check()
     await page.getByRole('button', { name: '最近生成' }).click()
     await page.getByTestId('emoji-card').first().getByRole('button', { name: '再次创作' }).click()
@@ -152,7 +190,7 @@ test('renders, persists and restores compact and poster layouts', async () => {
     const compactEffectPreviewBox = await page.getByTestId('effect-preview-art').boundingBox()
     expect(compactEffectPreviewBox?.width).toBeGreaterThanOrEqual(128)
     expect(compactEffectPreviewBox?.height).toBeGreaterThanOrEqual(128)
-    const generateButtonBox = await page.getByRole('button', { name: '生成一组' }).boundingBox()
+    const generateButtonBox = await page.getByRole('button', { name: '生成海报' }).boundingBox()
     expect(generateButtonBox).not.toBeNull()
     expect((generateButtonBox?.y ?? 640) + (generateButtonBox?.height ?? 1))
       .toBeLessThanOrEqual(640)
