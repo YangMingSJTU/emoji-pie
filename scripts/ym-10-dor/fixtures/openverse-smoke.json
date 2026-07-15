@@ -1,0 +1,86 @@
+{
+  "result_count": 9,
+  "results": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "license": "cc0",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/1",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000001/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "license": "pdm",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/2",
+      "license_url": "https://creativecommons.org/publicdomain/mark/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000002/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "license": "cc0",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/3",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000003/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "license": "pdm",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/4",
+      "license_url": "https://creativecommons.org/publicdomain/mark/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000004/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "license": "cc0",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/5",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000005/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "license": "pdm",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/6",
+      "license_url": "https://creativecommons.org/publicdomain/mark/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000006/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "license": "cc0",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/7",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000007/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "license": "pdm",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/8",
+      "license_url": "https://creativecommons.org/publicdomain/mark/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000008/thumb/"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000009",
+      "license": "cc0",
+      "mature": false,
+      "foreign_landing_url": "https://example.invalid/assets/9",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source": "ym10-fixture",
+      "thumbnail": "{{ORIGIN}}/v1/images/00000000-0000-4000-8000-000000000009/thumb/"
+    }
+  ]
+}

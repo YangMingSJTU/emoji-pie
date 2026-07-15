@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://emoji-pie.local/schemas/ym-10-dor-metrics-v1.json",
+  "title": "YM-10 DOR probe metrics",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "probe_version",
+    "corpus_id",
+    "session",
+    "transport",
+    "status",
+    "error_code",
+    "status_code",
+    "result_count",
+    "eligible_count",
+    "candidate_count",
+    "license_distribution",
+    "bytes",
+    "timings_ms",
+    "hashes"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "probe_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "corpus_id": { "type": "string", "pattern": "^YM-10-[0-9]{3}$" },
+    "session": { "type": "string", "enum": ["cold", "warm"] },
+    "transport": { "type": "string", "enum": ["fixture", "openverse"] },
+    "status": { "type": "string", "enum": ["success", "partial", "needs_user_input", "failed"] },
+    "error_code": { "type": ["string", "null"], "pattern": "^[a-z0-9_]+$" },
+    "status_code": { "type": ["integer", "null"], "minimum": 100, "maximum": 599 },
+    "result_count": { "type": "integer", "minimum": 0 },
+    "eligible_count": { "type": "integer", "minimum": 0 },
+    "candidate_count": { "type": "integer", "minimum": 0, "maximum": 9 },
+    "license_distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cc0", "pdm", "by", "by_sa", "nc", "nd", "unknown", "rejected"],
+      "properties": {
+        "cc0": { "type": "integer", "minimum": 0 },
+        "pdm": { "type": "integer", "minimum": 0 },
+        "by": { "type": "integer", "minimum": 0 },
+        "by_sa": { "type": "integer", "minimum": 0 },
+        "nc": { "type": "integer", "minimum": 0 },
+        "nd": { "type": "integer", "minimum": 0 },
+        "unknown": { "type": "integer", "minimum": 0 },
+        "rejected": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "bytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["search_response", "downloaded", "generated", "clipboard", "exported"],
+      "properties": {
+        "search_response": { "type": "integer", "minimum": 0 },
+        "downloaded": { "type": "integer", "minimum": 0 },
+        "generated": { "type": "integer", "minimum": 0 },
+        "clipboard": { "type": "integer", "minimum": 0 },
+        "exported": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "timings_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planner",
+        "search",
+        "license_gate",
+        "download_span",
+        "decode_compose_span",
+        "three_ready",
+        "nine_ready",
+        "clipboard",
+        "export",
+        "total"
+      ],
+      "properties": {
+        "planner": { "type": "integer", "minimum": 0 },
+        "search": { "type": "integer", "minimum": 0 },
+        "license_gate": { "type": "integer", "minimum": 0 },
+        "download_span": { "type": "integer", "minimum": 0 },
+        "decode_compose_span": { "type": "integer", "minimum": 0 },
+        "three_ready": { "type": "integer", "minimum": 0 },
+        "nine_ready": { "type": "integer", "minimum": 0 },
+        "clipboard": { "type": "integer", "minimum": 0 },
+        "export": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_fingerprint", "candidate_set", "clipboard", "export"],
+      "properties": {
+        "run_fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "candidate_set": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "clipboard": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" },
+        "export": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

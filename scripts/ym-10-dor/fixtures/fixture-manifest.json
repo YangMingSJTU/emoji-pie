@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "baseline_commit": "148de86f1273353e6edcb79567598c2389e3a818",
+  "fixtures": [
+    {
+      "path": "certs/localhost-ca.pem",
+      "role": "localhost HTTPS fixture CA certificate",
+      "size_bytes": 1143,
+      "sha256": "861fa44a9ee8bc26bd83952fda14cc4705f1c3aeafbe07adcf24722d5bc24d69"
+    },
+    {
+      "path": "certs/localhost-cert.pem",
+      "role": "localhost HTTPS fixture leaf certificate",
+      "size_bytes": 1192,
+      "sha256": "155d4e5b427ecb4b4c107941eabf1a05d9ad4754e99efb4843be291c655c159c"
+    },
+    {
+      "path": "certs/localhost-key.pem",
+      "role": "public test-only localhost fixture key",
+      "size_bytes": 1704,
+      "sha256": "9ba8fb0bf43128c3fc286b88999607aaa4f54f5f53b89e5b936eb054465df28f"
+    },
+    {
+      "path": "certs/README.md",
+      "role": "fixture key scope notice",
+      "size_bytes": 500,
+      "sha256": "b945546580edb3f046245b06d52bce6e4f7d4797a3263b4aadc10e597db95764"
+    },
+    {
+      "path": "openverse-license-matrix.json",
+      "role": "license and source gate matrix",
+      "size_bytes": 3148,
+      "sha256": "50c644f34ca8cc325ebe6db9114aa957e620896ad948c5851a7184c2884359ca"
+    },
+    {
+      "path": "openverse-smoke.json",
+      "role": "deterministic nine-result HTTPS smoke payload",
+      "size_bytes": 3373,
+      "sha256": "2507bcb5d3f6f258378c851fd40cf4aefda2463d2d821e6d729b7854f893970a"
+    },
+    {
+      "path": "YM-10-Corpus-v1.json",
+      "role": "frozen 50-row corpus",
+      "size_bytes": 7247,
+      "sha256": "bb85300ef8df51b0d6ba2a57b5d485ea2430a65c4dc2b2030bd0fbe72cfb6a33"
+    }
+  ]
+}

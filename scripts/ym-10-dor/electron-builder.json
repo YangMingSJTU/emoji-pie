@@ -1,0 +1,35 @@
+{
+  "appId": "com.emojipie.ym10dorprobe",
+  "productName": "YM-10 DOR Probe - NON RELEASE",
+  "electronVersion": "43.1.0",
+  "npmRebuild": false,
+  "nodeGypRebuild": false,
+  "buildDependenciesFromSource": false,
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/sharp/**/*",
+    "node_modules/@img/**/*"
+  ],
+  "files": [
+    "**/*",
+    "!**/*.map"
+  ],
+  "artifactName": "YM-10-DOR-Probe-${version}-${arch}-nonrelease-setup.${ext}",
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      }
+    ],
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": false,
+    "createStartMenuShortcut": false,
+    "deleteAppDataOnUninstall": true,
+    "runAfterFinish": false
+  }
+}

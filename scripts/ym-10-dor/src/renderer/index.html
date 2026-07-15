@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'" />
+    <title>YM-10 DOR Probe</title>
+    <style>
+      :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #111827; color: #e5e7eb; }
+      body { margin: 0; padding: 32px; }
+      main { max-width: 860px; margin: 0 auto; }
+      h1 { margin: 0 0 8px; font-size: 28px; }
+      .warning { color: #fbbf24; margin-bottom: 24px; }
+      label { display: grid; gap: 6px; margin: 14px 0; }
+      input, textarea, select, button { font: inherit; }
+      input, textarea, select { color: inherit; background: #1f2937; border: 1px solid #4b5563; border-radius: 8px; padding: 10px; }
+      textarea { min-height: 92px; resize: vertical; }
+      button { border: 0; border-radius: 8px; padding: 10px 18px; background: #f59e0b; color: #111827; font-weight: 700; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: wait; }
+      pre { min-height: 180px; overflow: auto; white-space: pre-wrap; background: #030712; border: 1px solid #374151; border-radius: 10px; padding: 16px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>YM-10 DOR Probe</h1>
+      <p class="warning">独立、非发布验证探针。不会写入表情派业务数据库，也不包含历史、收藏或正式创作 UI。</p>
+      <form id="probe-form">
+        <label>Corpus ID <input id="corpus-id" value="YM-10-001" pattern="YM-10-[0-9]{3}" required /></label>
+        <label>本地输入 <textarea id="input" maxlength="500" required>今天又要加班了</textarea></label>
+        <label>传输
+          <select id="transport">
+            <option value="fixture">本地 HTTPS fixture（默认）</option>
+            <option value="openverse">固定 Openverse 实网（计入每日 10 批）</option>
+          </select>
+        </label>
+        <label>会话
+          <select id="session"><option value="cold">cold</option><option value="warm">warm</option></select>
+        </label>
+        <button id="run" type="submit">运行验证批次</button>
+      </form>
+      <h2>脱敏指标</h2>
+      <pre id="result" aria-live="polite">尚未运行</pre>
+    </main>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

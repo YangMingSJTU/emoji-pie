@@ -1,0 +1,10 @@
+{
+  "name": "ym-10-dor-probe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Independent, non-release Electron validation probe for YM-10",
+  "main": "main.js",
+  "dependencies": {
+    "sharp": "0.35.3"
+  }
+}
