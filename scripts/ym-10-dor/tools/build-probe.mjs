@@ -126,7 +126,7 @@ if (explicitOutputRoot) await ensureEmptyDirectory(outputRoot)
 
 assertCleanCheckout()
 const sourceCommit = gitText(['rev-parse', 'HEAD'])
-if (gitText(['rev-parse', '--show-toplevel']).toLowerCase() !== repositoryRoot.toLowerCase()) {
+if (resolve(gitText(['rev-parse', '--show-toplevel'])).toLowerCase() !== repositoryRoot.toLowerCase()) {
   throw new Error('repository_root_mismatch')
 }
 const ancestor = spawnSync('git', ['merge-base', '--is-ancestor', BASELINE_COMMIT, sourceCommit], {
