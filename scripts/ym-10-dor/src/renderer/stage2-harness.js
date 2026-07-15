@@ -1,3 +1,4 @@
+/* global document, performance, setInterval, structuredClone */
 (() => {
   'use strict'
   let state = { input: '', settings: {}, previousBatch: [] }
