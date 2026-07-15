@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url'
 
 const ISSUE_ID = 'e7466c78-898a-424f-aa4a-66de720bae77'
 const BASELINE_COMMIT = '148de86f1273353e6edcb79567598c2389e3a818'
-const BASELINE_LOCK_BLOB_SHA256 = 'de61717ae5b1fb87dffdd3e985e6cfa3e6a15f171da674ee976ef14f5552d35c'
+const BASELINE_LOCK_BLOB_SHA256 = '304825ae1935e24aa479b4a64b35e8107d8964dd5fc1d7a52441a3b4b7e1ba01'
+const EXPECTED_WINDOWS_WORKTREE_LOCK_SHA256 = 'de61717ae5b1fb87dffdd3e985e6cfa3e6a15f171da674ee976ef14f5552d35c'
 const PART_SIZE_BYTES = 40 * 1024 * 1024
 
 const toolsDirectory = dirname(fileURLToPath(import.meta.url))
@@ -124,6 +125,9 @@ const sourceParent = gitText(['rev-parse', 'HEAD^'])
 const baselineLockBlobSha256 = sha256(gitBytes(['show', `${BASELINE_COMMIT}:package-lock.json`]))
 const sourceLockBlobSha256 = sha256(gitBytes(['show', `${sourceCommit}:package-lock.json`]))
 const worktreeLockSha256 = await sha256File(join(repositoryRoot, 'package-lock.json'))
+if (process.platform === 'win32' && worktreeLockSha256 !== EXPECTED_WINDOWS_WORKTREE_LOCK_SHA256) {
+  throw new Error('windows_worktree_lock_hash_mismatch')
+}
 if (baselineLockBlobSha256 !== BASELINE_LOCK_BLOB_SHA256 ||
   sourceLockBlobSha256 !== BASELINE_LOCK_BLOB_SHA256) throw new Error('package_lock_blob_hash_mismatch')
 const ancestorCheck = spawnSync('git', ['merge-base', '--is-ancestor', BASELINE_COMMIT, sourceCommit], {

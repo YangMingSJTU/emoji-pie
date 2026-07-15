@@ -7,7 +7,8 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { fileURLToPath } from 'node:url'
 
 const BASELINE_COMMIT = '148de86f1273353e6edcb79567598c2389e3a818'
-const BASELINE_LOCK_BLOB_SHA256 = 'de61717ae5b1fb87dffdd3e985e6cfa3e6a15f171da674ee976ef14f5552d35c'
+const BASELINE_LOCK_BLOB_SHA256 = '304825ae1935e24aa479b4a64b35e8107d8964dd5fc1d7a52441a3b4b7e1ba01'
+const EXPECTED_WINDOWS_WORKTREE_LOCK_SHA256 = 'de61717ae5b1fb87dffdd3e985e6cfa3e6a15f171da674ee976ef14f5552d35c'
 const EXPECTED_TOOLCHAIN = {
   node: 'v24.14.0',
   electron: '43.1.0',
@@ -138,6 +139,9 @@ if (lockBlobSha256 !== BASELINE_LOCK_BLOB_SHA256) throw new Error('baseline_lock
 const sourceLockBlobSha256 = sha256(gitBytes(['show', `${sourceCommit}:package-lock.json`]))
 if (sourceLockBlobSha256 !== BASELINE_LOCK_BLOB_SHA256) throw new Error('source_lock_blob_hash_mismatch')
 const worktreeLockSha256 = await sha256File(join(repositoryRoot, 'package-lock.json'))
+if (process.platform === 'win32' && worktreeLockSha256 !== EXPECTED_WINDOWS_WORKTREE_LOCK_SHA256) {
+  throw new Error('windows_worktree_lock_hash_mismatch')
+}
 const dependencyVersions = await verifyDependencyProvenance()
 if (process.version !== EXPECTED_TOOLCHAIN.node) throw new Error(`node_version_mismatch:${process.version}`)
 

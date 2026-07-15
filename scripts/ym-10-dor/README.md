@@ -32,8 +32,8 @@ It does not contain the EmojiPie creation UI, history, favorites, database migra
 
 `package-lock.json` has two intentionally distinct byte scopes on Windows:
 
-- Git blob / normalized LF SHA256: `de61717ae5b1fb87dffdd3e985e6cfa3e6a15f171da674ee976ef14f5552d35c`;
-- Windows worktree-byte SHA256: calculated and recorded for the exact checkout.
+- Git blob / normalized LF SHA256: `304825ae1935e24aa479b4a64b35e8107d8964dd5fc1d7a52441a3b4b7e1ba01`;
+- Windows worktree-byte SHA256: `de61717ae5b1fb87dffdd3e985e6cfa3e6a15f171da674ee976ef14f5552d35c`.
 
 The evidence manifest names both scopes. They are never presented as the same artifact. `scripts/ym-10-dor/.gitattributes` fixes every probe source and fixture blob to LF, and fixture hashes are exact Git-blob bytes.
 
