@@ -313,8 +313,15 @@ async function runStage2PackagedHarness(outputDirectory: string): Promise<Stage2
     const killTarget = processor.processLocal(crashFixture.imported.bytes, 0)
     const killedWorkerPid = processor.terminateBusyWorker()
     const killRejected = await rejectsWith(killTarget, 'sharp_worker_exited')
+    let workerPidsAfterRecovery = processor.activeWorkerPids()
+    while (performance.now() - killStartedAt <= 3_000 && (
+      workerPidsAfterRecovery.length !== DECODE_CONCURRENCY ||
+      workerPidsAfterRecovery.includes(killedWorkerPid ?? -1)
+    )) {
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 10))
+      workerPidsAfterRecovery = processor.activeWorkerPids()
+    }
     const recoveryMs = Math.round(performance.now() - killStartedAt)
-    const workerPidsAfterRecovery = processor.activeWorkerPids()
 
     await window.webContents.executeJavaScript(
       `globalThis.stage2Harness.showWorkerError('sharp_worker_exited', ${JSON.stringify(killedWorkerPid)})`
