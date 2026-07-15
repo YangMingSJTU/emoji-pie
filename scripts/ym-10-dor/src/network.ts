@@ -33,12 +33,44 @@ interface TransportOptions {
   ca?: string
 }
 
+type AllowedImageMediaType = DownloadOutcome['mediaType']
+type ExpectedResponse = 'json' | 'image'
+
+interface BoundedResponse {
+  bytes: Buffer
+  statusCode: number
+  mediaType: string
+}
+
+const ALLOWED_IMAGE_MEDIA_TYPES = new Set<AllowedImageMediaType>([
+  'image/png',
+  'image/jpeg',
+  'image/webp'
+])
+
+function normalizedMediaType(value: string | string[] | undefined): string {
+  return typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : ''
+}
+
+function detectedImageMediaType(bytes: Buffer): AllowedImageMediaType | null {
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+  )) return 'image/png'
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' &&
+    bytes.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp'
+  return null
+}
+
 async function requestBounded(
   url: URL,
   maximumBytes: number,
   timeoutMs: number,
+  expectedResponse: ExpectedResponse,
   ca?: string
-): Promise<{ bytes: Buffer; statusCode: number }> {
+): Promise<BoundedResponse> {
   const options: RequestOptions = {
     protocol: 'https:',
     hostname: url.hostname,
@@ -48,47 +80,85 @@ async function requestBounded(
     ca,
     rejectUnauthorized: true,
     headers: {
-      accept: url.pathname.endsWith('/thumb/') ? 'image/*' : 'application/json',
+      accept: expectedResponse === 'image' ? 'image/png,image/jpeg,image/webp' : 'application/json',
       'user-agent': `EmojiPie-YM10-DOR-Probe/${PROBE_VERSION}`
     }
   }
 
   return new Promise((resolve, reject) => {
+    let settled = false
+    const fail = (error: ProbeNetworkError): void => {
+      if (settled) return
+      settled = true
+      reject(error)
+    }
     const request = httpsRequest(options, (response) => {
       const statusCode = response.statusCode ?? 0
       if (statusCode >= 300 && statusCode < 400) {
         response.resume()
-        reject(new ProbeNetworkError('redirect_rejected', statusCode))
+        fail(new ProbeNetworkError('redirect_rejected', statusCode))
         return
       }
+      if (statusCode < 200 || statusCode >= 300) {
+        response.resume()
+        fail(new ProbeNetworkError('http_error', statusCode))
+        return
+      }
+
+      const mediaType = normalizedMediaType(response.headers['content-type'])
+      if (expectedResponse === 'json' && mediaType !== 'application/json') {
+        response.resume()
+        fail(new ProbeNetworkError('json_content_type_rejected', statusCode))
+        return
+      }
+      if (expectedResponse === 'image' && !ALLOWED_IMAGE_MEDIA_TYPES.has(mediaType as AllowedImageMediaType)) {
+        response.resume()
+        fail(new ProbeNetworkError('image_content_type_rejected', statusCode))
+        return
+      }
+
       const declaredLength = Number(response.headers['content-length'] ?? '0')
       if (Number.isFinite(declaredLength) && declaredLength > maximumBytes) {
-        response.destroy()
-        reject(new ProbeNetworkError('declared_response_too_large', statusCode))
+        response.resume()
+        fail(new ProbeNetworkError('declared_response_too_large', statusCode))
         return
       }
 
       const chunks: Buffer[] = []
       let total = 0
       response.on('data', (chunk: Buffer) => {
+        if (settled) return
         total += chunk.byteLength
         if (total > maximumBytes) {
-          response.destroy(new ProbeNetworkError('streamed_response_too_large', statusCode))
+          fail(new ProbeNetworkError('streamed_response_too_large', statusCode))
+          response.destroy()
           return
         }
         chunks.push(Buffer.from(chunk))
       })
+      response.once('error', () => fail(new ProbeNetworkError('response_stream_error', statusCode)))
+      response.once('aborted', () => fail(new ProbeNetworkError('response_stream_aborted', statusCode)))
       response.once('end', () => {
-        if (statusCode < 200 || statusCode >= 300) {
-          reject(new ProbeNetworkError('http_error', statusCode))
-          return
+        if (settled) return
+        const bytes = Buffer.concat(chunks)
+        if (expectedResponse === 'image') {
+          const detected = detectedImageMediaType(bytes)
+          if (!detected) {
+            fail(new ProbeNetworkError('image_magic_rejected', statusCode))
+            return
+          }
+          if (detected !== mediaType) {
+            fail(new ProbeNetworkError('image_type_mismatch', statusCode))
+            return
+          }
         }
-        resolve({ bytes: Buffer.concat(chunks), statusCode })
+        settled = true
+        resolve({ bytes, statusCode, mediaType })
       })
     })
     request.setTimeout(timeoutMs, () => request.destroy(new ProbeNetworkError('request_timeout')))
     request.once('error', (error) => {
-      reject(error instanceof ProbeNetworkError ? error : new ProbeNetworkError('network_error'))
+      fail(error instanceof ProbeNetworkError ? error : new ProbeNetworkError('network_error'))
     })
     request.end()
   })
@@ -117,10 +187,12 @@ class HttpsProbeTransport implements ProbeTransport {
     }
   }
 
-  isThumbnailUrlAllowed(value: string): boolean {
+  isThumbnailUrlAllowed(value: string, expectedId?: string): boolean {
     try {
       const url = new URL(value)
-      return url.origin === this.origin.origin && OPENVERSE_THUMBNAIL_PATH.test(url.pathname) &&
+      const match = OPENVERSE_THUMBNAIL_PATH.exec(url.pathname)
+      return url.origin === this.origin.origin && Boolean(match) &&
+        (!expectedId || match?.[1].toLowerCase() === expectedId.toLowerCase()) &&
         !url.username && !url.password && !url.search && !url.hash
     } catch {
       return false
@@ -142,6 +214,7 @@ class HttpsProbeTransport implements ProbeTransport {
         url,
         MAX_SEARCH_RESPONSE_BYTES,
         SEARCH_TIMEOUT_MS,
+        'json',
         this.ca
       )
       let payload: unknown
@@ -160,15 +233,21 @@ class HttpsProbeTransport implements ProbeTransport {
 
   download(asset: OpenverseAsset): Promise<DownloadOutcome> {
     return this.downloadLimiter.run(async () => {
-      if (!this.isThumbnailUrlAllowed(asset.thumbnailUrl)) {
+      if (!this.isThumbnailUrlAllowed(asset.thumbnailUrl, asset.id)) {
         throw new ProbeNetworkError('thumbnail_url_rejected')
       }
-      return requestBounded(
+      const response = await requestBounded(
         new URL(asset.thumbnailUrl),
         MAX_IMAGE_RESPONSE_BYTES,
         DOWNLOAD_TIMEOUT_MS,
+        'image',
         this.ca
       )
+      return {
+        bytes: response.bytes,
+        statusCode: response.statusCode,
+        mediaType: response.mediaType as AllowedImageMediaType
+      }
     })
   }
 }

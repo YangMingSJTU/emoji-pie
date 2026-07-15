@@ -2,7 +2,6 @@ import type { KeywordPlan } from './contracts'
 import { redactPrivateTerms } from './privacy'
 
 const AMBIGUOUS_INPUTS = new Set(['行', '6', '🙃'])
-const STOP_WORDS = new Set(['今天', '这个', '那个', '怎么', '一下', '真的', '已经', '还是'])
 
 const KEYWORD_RULES: ReadonlyArray<readonly [RegExp, readonly string[]]> = [
   [/加班|需求|老板|会议|进度/u, ['办公', '工作']],
@@ -26,13 +25,6 @@ const KEYWORD_RULES: ReadonlyArray<readonly [RegExp, readonly string[]]> = [
   [/救命/u, ['求助', '危险']]
 ]
 
-function safeFallbackTokens(value: string): string[] {
-  return (value.match(/[\p{Script=Han}A-Za-z0-9]+/gu) ?? [])
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length >= 2 && !STOP_WORDS.has(entry))
-    .map((entry) => [...entry].slice(0, 6).join(''))
-}
-
 export function planKeywords(input: string): KeywordPlan {
   const normalized = [...input]
     .map((character) => character.charCodeAt(0) < 32 ? ' ' : character)
@@ -53,13 +45,23 @@ export function planKeywords(input: string): KeywordPlan {
     }
     if (keywords.length === 3) break
   }
-  if (keywords.length === 0) {
-    for (const token of safeFallbackTokens(safeInput)) {
-      if (!keywords.includes(token)) keywords.push(token)
-    }
-    keywords.splice(3)
-  }
   return keywords.length > 0
     ? { status: 'ready', keywords }
     : { status: 'needs_user_input', keywords: [] }
+}
+
+export function normalizeConfirmedKeywords(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 3) return null
+  const normalized: string[] = []
+  for (const entry of value) {
+    if (typeof entry !== 'string') return null
+    const keyword = entry.normalize('NFKC').replace(/\s+/gu, ' ').trim()
+    const hasControlCharacter = [...keyword].some((character) => {
+      const code = character.charCodeAt(0)
+      return code < 32 || code === 127
+    })
+    if (!keyword || [...keyword].length > 32 || hasControlCharacter) return null
+    if (!normalized.includes(keyword)) normalized.push(keyword)
+  }
+  return normalized.length >= 1 && normalized.length <= 3 ? normalized : null
 }

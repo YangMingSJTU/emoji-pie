@@ -21,8 +21,23 @@ export class DailyOnlineQuota {
     return result
   }
 
+  async usage(): Promise<number> {
+    const utcDate = this.now().toISOString().slice(0, 10)
+    return (await this.readState(utcDate)).count
+  }
+
   private async consumeNow(): Promise<void> {
     const utcDate = this.now().toISOString().slice(0, 10)
+    const state = await this.readState(utcDate)
+    if (state.count >= MAX_ONLINE_BATCHES_PER_UTC_DAY) throw new Error('daily_online_limit_reached')
+    state.count += 1
+    await mkdir(dirname(this.statePath), { recursive: true })
+    const temporaryPath = `${this.statePath}.${process.pid}.tmp`
+    await writeFile(temporaryPath, `${JSON.stringify(state)}\n`, { encoding: 'utf8', flag: 'w' })
+    await rename(temporaryPath, this.statePath)
+  }
+
+  private async readState(utcDate: string): Promise<QuotaState> {
     let state: QuotaState = { utcDate, count: 0 }
     try {
       const parsed = JSON.parse(await readFile(this.statePath, 'utf8')) as Partial<QuotaState>
@@ -32,11 +47,6 @@ export class DailyOnlineQuota {
     } catch {
       // Missing or malformed local quota state resets only the current UTC day.
     }
-    if (state.count >= MAX_ONLINE_BATCHES_PER_UTC_DAY) throw new Error('daily_online_limit_reached')
-    state.count += 1
-    await mkdir(dirname(this.statePath), { recursive: true })
-    const temporaryPath = `${this.statePath}.${process.pid}.tmp`
-    await writeFile(temporaryPath, `${JSON.stringify(state)}\n`, { encoding: 'utf8', flag: 'w' })
-    await rename(temporaryPath, this.statePath)
+    return state
   }
 }

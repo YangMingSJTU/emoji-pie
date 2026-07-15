@@ -16,7 +16,10 @@
       input, textarea, select { color: inherit; background: #1f2937; border: 1px solid #4b5563; border-radius: 8px; padding: 10px; }
       textarea { min-height: 92px; resize: vertical; }
       button { border: 0; border-radius: 8px; padding: 10px 18px; background: #f59e0b; color: #111827; font-weight: 700; cursor: pointer; }
+      button.secondary { background: #9ca3af; }
       button:disabled { opacity: .5; cursor: wait; }
+      .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+      #keyword-panel { margin: 18px 0; padding: 16px; border: 1px solid #f59e0b; border-radius: 10px; }
       pre { min-height: 180px; overflow: auto; white-space: pre-wrap; background: #030712; border: 1px solid #374151; border-radius: 10px; padding: 16px; }
     </style>
   </head>
@@ -30,14 +33,25 @@
         <label>传输
           <select id="transport">
             <option value="fixture">本地 HTTPS fixture（默认）</option>
-            <option value="openverse">固定 Openverse 实网（计入每日 10 批）</option>
+            <option value="openverse">固定 Openverse 实网（确认后计入每日 10 批）</option>
           </select>
         </label>
         <label>会话
           <select id="session"><option value="cold">cold</option><option value="warm">warm</option></select>
         </label>
-        <button id="run" type="submit">运行验证批次</button>
+        <button id="plan" type="submit">仅在本地规划关键词</button>
       </form>
+      <p id="plan-status" aria-live="polite">尚未规划；不会发送请求。</p>
+      <section id="keyword-panel" hidden>
+        <label>将发送的关键词（每行一个，最多 3 个）
+          <textarea id="keywords" maxlength="100"></textarea>
+        </label>
+        <p>请先检查和编辑。完整输入、图片与历史不会发送；取消不会消耗在线配额。</p>
+        <div class="actions">
+          <button id="confirm" type="button">确认关键词并运行</button>
+          <button id="cancel" class="secondary" type="button">取消</button>
+        </div>
+      </section>
       <h2>脱敏指标</h2>
       <pre id="result" aria-live="polite">尚未运行</pre>
     </main>

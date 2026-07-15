@@ -8,7 +8,7 @@ export interface KeywordPlan {
 
 export interface ProbeRunRequest {
   corpusId: string
-  input: string
+  confirmedKeywords?: string[]
   session: 'cold' | 'warm'
 }
 
@@ -42,13 +42,14 @@ export interface SearchOutcome {
 export interface DownloadOutcome {
   bytes: Buffer
   statusCode: number
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp'
 }
 
 export interface ProbeTransport {
   readonly mode: ProbeTransportMode
   search(keywords: readonly string[]): Promise<SearchOutcome>
   download(asset: OpenverseAsset): Promise<DownloadOutcome>
-  isThumbnailUrlAllowed(value: string): boolean
+  isThumbnailUrlAllowed(value: string, expectedId?: string): boolean
 }
 
 export interface ProcessedImage {

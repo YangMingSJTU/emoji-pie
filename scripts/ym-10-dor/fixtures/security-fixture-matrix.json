@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "images": [
+    { "id": "10000000-0000-4000-8000-000000000001", "case": "wrong_media_type", "expected_error": "image_content_type_rejected" },
+    { "id": "10000000-0000-4000-8000-000000000002", "case": "fake_png_magic", "expected_error": "image_magic_rejected" },
+    { "id": "10000000-0000-4000-8000-000000000003", "case": "media_magic_mismatch", "expected_error": "image_type_mismatch" },
+    { "id": "10000000-0000-4000-8000-000000000004", "case": "streamed_over_limit", "expected_error": "streamed_response_too_large" },
+    { "id": "10000000-0000-4000-8000-000000000005", "case": "corrupt_png", "expected_error": "sharp_processing_failed" },
+    { "id": "10000000-0000-4000-8000-000000000006", "case": "dimension_bomb_png", "expected_error": "image_dimensions_rejected" }
+  ]
+}

@@ -1,7 +1,32 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "baseline_commit": "148de86f1273353e6edcb79567598c2389e3a818",
+  "hash_scope": "exact Git blob bytes; scripts/ym-10-dor/.gitattributes enforces LF",
   "fixtures": [
+    {
+      "path": "openverse-license-matrix.json",
+      "role": "fail-closed license, maturity, ID, thumbnail, and license-link matrix",
+      "size_bytes": 5564,
+      "sha256": "c7bc6ee277dcea2c696360a1780e99383404b99e690608ebbc160776ad1fc3ee"
+    },
+    {
+      "path": "openverse-smoke.json",
+      "role": "deterministic nine-result HTTPS smoke payload",
+      "size_bytes": 3373,
+      "sha256": "2507bcb5d3f6f258378c851fd40cf4aefda2463d2d821e6d729b7854f893970a"
+    },
+    {
+      "path": "security-fixture-matrix.json",
+      "role": "MIME, magic, streaming, corruption, and dimension-bomb matrix",
+      "size_bytes": 811,
+      "sha256": "c23847347d297b7da2248b3bfcad2a5d201f959cdf297fa8923800d56a310a58"
+    },
+    {
+      "path": "YM-10-Corpus-v1.json",
+      "role": "frozen 50-row corpus",
+      "size_bytes": 7247,
+      "sha256": "bb85300ef8df51b0d6ba2a57b5d485ea2430a65c4dc2b2030bd0fbe72cfb6a33"
+    },
     {
       "path": "certs/localhost-ca.pem",
       "role": "localhost HTTPS fixture CA certificate",
@@ -25,24 +50,6 @@
       "role": "fixture key scope notice",
       "size_bytes": 500,
       "sha256": "b945546580edb3f046245b06d52bce6e4f7d4797a3263b4aadc10e597db95764"
-    },
-    {
-      "path": "openverse-license-matrix.json",
-      "role": "license and source gate matrix",
-      "size_bytes": 3148,
-      "sha256": "50c644f34ca8cc325ebe6db9114aa957e620896ad948c5851a7184c2884359ca"
-    },
-    {
-      "path": "openverse-smoke.json",
-      "role": "deterministic nine-result HTTPS smoke payload",
-      "size_bytes": 3373,
-      "sha256": "2507bcb5d3f6f258378c851fd40cf4aefda2463d2d821e6d729b7854f893970a"
-    },
-    {
-      "path": "YM-10-Corpus-v1.json",
-      "role": "frozen 50-row corpus",
-      "size_bytes": 7247,
-      "sha256": "bb85300ef8df51b0d6ba2a57b5d485ea2430a65c4dc2b2030bd0fbe72cfb6a33"
     }
   ]
 }

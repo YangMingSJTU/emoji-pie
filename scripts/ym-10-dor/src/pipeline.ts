@@ -15,7 +15,7 @@ import type {
   ProcessedImage
 } from './contracts'
 import { stableSha256 } from './hashing'
-import { planKeywords } from './keyword-planner'
+import { normalizeConfirmedKeywords } from './keyword-planner'
 import { emptyLicenseDistribution, filterEligibleAssets } from './license-gate'
 import { assertMetricsMatchSchema, emptyTimings } from './metrics'
 import { ProbeNetworkError } from './network'
@@ -124,12 +124,12 @@ export class Ym10ProbePipeline {
     const hashes = zeroHashes()
     const metrics = baseMetrics(request, this.transport, timings, bytes, distribution, hashes)
 
-    const plannerStartedAt = performance.now()
-    const plan = planKeywords(request.input)
-    timings.planner = elapsed(plannerStartedAt)
-    if (plan.status === 'needs_user_input') {
+    const confirmationStartedAt = performance.now()
+    const confirmedKeywords = normalizeConfirmedKeywords(request.confirmedKeywords)
+    timings.planner = elapsed(confirmationStartedAt)
+    if (!confirmedKeywords) {
       metrics.status = 'needs_user_input'
-      metrics.error_code = 'needs_user_input'
+      metrics.error_code = 'keywords_confirmation_required'
       timings.total = elapsed(startedAt)
       return this.finalize(metrics, [])
     }
@@ -137,7 +137,7 @@ export class Ym10ProbePipeline {
     let searchPayload: unknown
     try {
       const searchStartedAt = performance.now()
-      const search = await this.transport.search(plan.keywords)
+      const search = await this.transport.search(confirmedKeywords)
       timings.search = elapsed(searchStartedAt)
       metrics.status_code = search.statusCode
       bytes.search_response = search.responseBytes
@@ -153,7 +153,7 @@ export class Ym10ProbePipeline {
     const gateStartedAt = performance.now()
     const gated = filterEligibleAssets(
       searchPayload,
-      (value) => this.transport.isThumbnailUrlAllowed(value)
+      (value, expectedId) => this.transport.isThumbnailUrlAllowed(value, expectedId)
     )
     timings.license_gate = elapsed(gateStartedAt)
     Object.assign(distribution, gated.distribution)
