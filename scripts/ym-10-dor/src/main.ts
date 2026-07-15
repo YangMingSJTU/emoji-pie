@@ -307,11 +307,10 @@ async function runStage2PackagedHarness(outputDirectory: string): Promise<Stage2
     ) as RendererHarnessSnapshot
 
     const killStartedAt = performance.now()
-    const killTarget = processor.processLocal(
-      fixtures.find(({ fixture }) => fixture.id === 'forty_megapixels')?.imported.bytes ??
-        fixtures[0].imported.bytes,
-      0
-    )
+    const crashFixture = fixtures.find(
+      ({ fixture }) => fixture.id === 'forty_megapixels'
+    ) ?? fixtures[0]
+    const killTarget = processor.processLocal(crashFixture.imported.bytes, 0)
     const killedWorkerPid = processor.terminateBusyWorker()
     const killRejected = await rejectsWith(killTarget, 'sharp_worker_exited')
     const recoveryMs = Math.round(performance.now() - killStartedAt)
@@ -326,7 +325,7 @@ async function runStage2PackagedHarness(outputDirectory: string): Promise<Stage2
     const screenshotFilename = 'stage2-harness-worker-error.png'
     await writeFile(join(outputDirectory, screenshotFilename), screenshotBytes, { flag: 'wx' })
 
-    const retry = await processor.processLocal(fixtures[0].imported.bytes, 0)
+    const retry = await processor.processLocal(crashFixture.imported.bytes, 0)
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 100))
     const after = await window.webContents.executeJavaScript(
       'globalThis.stage2Harness.snapshot()'
@@ -629,7 +628,8 @@ void app.whenReady().then(async () => {
     try {
       await runSmoke(smokeReportPath, metricsPath)
       app.exit(0)
-    } catch {
+    } catch (error) {
+      console.error(error)
       app.exit(1)
     }
     return
