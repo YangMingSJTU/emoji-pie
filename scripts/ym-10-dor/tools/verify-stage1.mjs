@@ -15,7 +15,8 @@ const PART_SIZE_BYTES = 40 * 1024 * 1024
 const toolsDirectory = dirname(fileURLToPath(import.meta.url))
 const probeDirectory = resolve(toolsDirectory, '..')
 const repositoryRoot = resolve(probeDirectory, '..', '..')
-const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const nodeBin = process.execPath
+const npmCli = resolve(dirname(nodeBin), 'node_modules', 'npm', 'bin', 'npm-cli.js')
 
 function argumentValue(name) {
   const index = process.argv.indexOf(name)
@@ -136,9 +137,8 @@ const ancestorCheck = spawnSync('git', ['merge-base', '--is-ancestor', BASELINE_
 })
 if (ancestorCheck.status !== 0) throw new Error('source_commit_not_based_on_frozen_baseline')
 
-await runCommand('npm-ci', npmExecutable, ['ci'])
+await runCommand('npm-ci', nodeBin, [npmCli, 'ci'])
 assertCleanCheckout()
-const nodeBin = process.execPath
 const probeTestsPath = join(resultsRoot, 'probe-tests.json')
 const repositoryTestsPath = join(resultsRoot, 'repository-tests.json')
 await runCommand('probe-typecheck', nodeBin, [
@@ -164,8 +164,8 @@ await runCommand('repository-tests', nodeBin, [
   '--reporter=json',
   '--outputFile', repositoryTestsPath
 ])
-await runCommand('repository-lint', npmExecutable, ['run', 'lint'])
-await runCommand('repository-build', npmExecutable, ['run', 'build'])
+await runCommand('repository-lint', nodeBin, [npmCli, 'run', 'lint'])
+await runCommand('repository-build', nodeBin, [npmCli, 'run', 'build'])
 await runCommand('probe-build', nodeBin, [
   join(probeDirectory, 'tools', 'build-probe.mjs'),
   '--output-root', buildRoot
@@ -253,7 +253,7 @@ const repositoryTestSummary = testSummary(repositoryTestResult)
 if (!probeTestSummary.success || !repositoryTestSummary.success) throw new Error('test_summary_not_passed')
 
 const dependencyLock = JSON.parse(await readFile(join(repositoryRoot, 'node_modules', '.package-lock.json'), 'utf8'))
-const npmVersion = String((await runCommand('npm-version', npmExecutable, ['--version'])).stdout).trim()
+const npmVersion = String((await runCommand('npm-version', nodeBin, [npmCli, '--version'])).stdout).trim()
 const environment = {
   schema_version: 1,
   captured_at_utc: new Date().toISOString(),
