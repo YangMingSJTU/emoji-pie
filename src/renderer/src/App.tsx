@@ -27,6 +27,7 @@ import { EmojiGrid } from './components/EmojiGrid'
 import { InlineEmojiTray } from './components/InlineEmojiTray'
 import { AgentRuntimeView } from './components/AgentRuntimeView'
 import { Brand, Sidebar, type PageId } from './components/Sidebar'
+import { LocalAssetsView } from './components/LocalAssetsView'
 import { Toast, type ToastKind, type ToastState } from './components/Toast'
 import { PROMPT_SUGGESTIONS, SCENE_LABELS } from './config'
 import { desktopApi } from './lib/desktop-api'
@@ -573,6 +574,8 @@ export default function App(): React.JSX.Element {
               </section>
             )}
           </div>
+        ) : page === 'local-assets' ? (
+          <LocalAssetsView onNotice={showToast} />
         ) : page === 'runtime' ? (
           <AgentRuntimeView
             settings={agentRuntimeSettings}

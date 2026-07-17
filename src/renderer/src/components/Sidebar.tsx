@@ -1,6 +1,6 @@
-import { Cpu, Heart, History, ServerCog, Sparkles } from 'lucide-react'
+import { Cpu, Heart, History, Images, ServerCog, Sparkles } from 'lucide-react'
 
-export type PageId = 'create' | 'history' | 'favorites' | 'runtime'
+export type PageId = 'create' | 'local-assets' | 'history' | 'favorites' | 'runtime'
 
 interface SidebarProps {
   page: PageId
@@ -12,6 +12,7 @@ interface SidebarProps {
 
 const NAV_ITEMS = [
   { id: 'create' as const, label: '生成表情', icon: Sparkles },
+  { id: 'local-assets' as const, label: '本地素材', icon: Images },
   { id: 'history' as const, label: '最近生成', icon: History },
   { id: 'favorites' as const, label: '我的收藏', icon: Heart },
   { id: 'runtime' as const, label: 'AI 运行时', icon: Cpu }

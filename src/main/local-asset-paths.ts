@@ -80,6 +80,17 @@ export class LocalAssetPathService {
     return `thumbnails/${asset}.webp`
   }
 
+  stagingThumbnailPath(sessionId: string, itemId: string): string {
+    const session = normalizeUuid(sessionId, 'sessionId')
+    const item = normalizeUuid(itemId, 'itemId')
+    return this.resolveInternal(`staging/${session}/${item}.thumbnail.webp`)
+  }
+
+  deletionStagingPath(assetId: string, kind: 'source' | 'thumbnail'): string {
+    const asset = normalizeUuid(assetId, 'assetId')
+    return this.resolveInternal(`staging/deletions/${asset}.${kind}`)
+  }
+
   resolve(relativePath: string): string {
     if (!parseManagedLocalAssetRelativePath(relativePath)) {
       throw new Error('Managed local-asset path must be canonical and relative')
@@ -136,6 +147,15 @@ export class LocalAssetPathService {
   }
 
   private resolveContained(relativePath: string): string {
+    const absolutePath = resolve(this.rootDirectory, ...relativePath.split('/'))
+    this.assertContained(this.rootDirectory, absolutePath)
+    return absolutePath
+  }
+
+  private resolveInternal(relativePath: string): string {
+    if (!relativePath || isAbsolute(relativePath) || relativePath.includes('\\')) {
+      throw new Error('Internal local-asset path must be relative')
+    }
     const absolutePath = resolve(this.rootDirectory, ...relativePath.split('/'))
     this.assertContained(this.rootDirectory, absolutePath)
     return absolutePath

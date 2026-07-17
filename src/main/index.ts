@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeImage, protocol, shell } from 'electron'
 import { IPC_CHANNELS } from '../shared/ipc'
 import type {
   AgentRuntimeGenerateRequest,
@@ -12,10 +12,14 @@ import type {
 import { isEmojiStyle, normalizeEmojiRenderSettings } from '../shared/types'
 import { countGraphemes, normalizeLocalAssetId } from '../shared/local-assets'
 import { AgentRuntimeManager, normalizeAgentRuntimeSettings } from './agent-runtime'
-import {
-  createUnavailableLocalAssetIpcService,
-  registerLocalAssetIpcHandlers
-} from './local-asset-ipc'
+import { registerLocalAssetIpcHandlers } from './local-asset-ipc'
+import { LocalAssetIndex } from './local-asset-index'
+import { LocalAssetService } from './local-asset-importer'
+import { LocalAssetPathService } from './local-asset-paths'
+import { ElectronLocalAssetPicker, FixedDirectoryLocalAssetPicker } from './local-asset-picker'
+import { createLocalAssetProtocolHandler, LOCAL_ASSET_PROTOCOL, localAssetThumbnailUrl } from './local-asset-protocol'
+import { LocalAssetRepository } from './local-asset-repository'
+import { ElectronSharpUtilityProcessPool } from './local-asset-utility-pool'
 import { EmojiRepository } from './repository'
 
 const MAX_SAVE_BATCH = 24
@@ -24,10 +28,20 @@ const EMOJI_RENDER_SETTINGS_KEY = 'emoji-render-settings-v1'
 let mainWindow: BrowserWindow | null = null
 let repository: EmojiRepository | null = null
 let agentRuntime: AgentRuntimeManager | null = null
+let localAssetService: LocalAssetService | null = null
 
 if (process.env.EMOJI_PIE_USER_DATA) {
   app.setPath('userData', process.env.EMOJI_PIE_USER_DATA)
 }
+
+protocol.registerSchemesAsPrivileged([{
+  scheme: LOCAL_ASSET_PROTOCOL,
+  privileges: {
+    standard: true,
+    secure: true,
+    supportFetchAPI: true
+  }
+}])
 
 function isEmojiRecord(record: unknown): record is EmojiRecord {
   if (!record || typeof record !== 'object') return false
@@ -65,6 +79,11 @@ function requireRepository(): EmojiRepository {
   return repository
 }
 
+
+function requireLocalAssetService(): LocalAssetService {
+  if (!localAssetService) throw new Error('本地素材服务尚未初始化')
+  return localAssetService
+}
 function requireAgentRuntime(): AgentRuntimeManager {
   if (!agentRuntime) throw new Error('AI 运行时尚未初始化')
   return agentRuntime
@@ -114,7 +133,7 @@ function isInlineEmojiValue(value: unknown): value is string {
 }
 
 function registerIpcHandlers(): void {
-  registerLocalAssetIpcHandlers(ipcMain, createUnavailableLocalAssetIpcService())
+  registerLocalAssetIpcHandlers(ipcMain, requireLocalAssetService())
 
   ipcMain.handle(IPC_CHANNELS.libraryList, (_event, filter: LibraryFilter = 'all') => {
     return requireRepository().list(filter === 'favorites' ? 'favorites' : 'all')
@@ -264,10 +283,34 @@ if (!hasSingleInstanceLock) {
     mainWindow.focus()
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     app.setAppUserModelId('com.emojipie.desktop')
-    repository = new EmojiRepository(join(app.getPath('userData'), 'emoji-pie.sqlite'))
+    const userDataDirectory = app.getPath('userData')
+    const databasePath = join(userDataDirectory, 'emoji-pie.sqlite')
+    repository = new EmojiRepository(databasePath)
     agentRuntime = new AgentRuntimeManager()
+    const localAssetPaths = new LocalAssetPathService(userDataDirectory)
+    const localAssetRepository = new LocalAssetRepository(databasePath, localAssetThumbnailUrl)
+    const fixtureDirectory = !app.isPackaged
+      ? process.env.EMOJI_PIE_LOCAL_ASSET_FIXTURE_DIR
+      : undefined
+    const localAssetPicker = fixtureDirectory
+      ? new FixedDirectoryLocalAssetPicker(fixtureDirectory)
+      : new ElectronLocalAssetPicker(() => mainWindow)
+    localAssetService = new LocalAssetService(
+      localAssetRepository,
+      new LocalAssetIndex(),
+      localAssetPaths,
+      localAssetPicker,
+      new ElectronSharpUtilityProcessPool(
+        join(app.getAppPath(), 'src', 'main', 'local-asset-worker-process.cjs')
+      )
+    )
+    await localAssetService.initialize()
+    protocol.handle(
+      LOCAL_ASSET_PROTOCOL,
+      createLocalAssetProtocolHandler(localAssetRepository, localAssetPaths)
+    )
     registerIpcHandlers()
     createWindow()
 
@@ -284,6 +327,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   agentRuntime?.dispose()
   agentRuntime = null
+  void localAssetService?.dispose()
+  localAssetService = null
   repository?.close()
   repository = null
 })
