@@ -58,7 +58,10 @@ export class LocalPosterGenerator {
 
     this.active = true
     try {
-      const candidates = await Promise.all(selected.value.map(async (selection, variant) => {
+      const renderedCandidates = await Promise.allSettled(selected.value.map(async (
+        selection,
+        variant
+      ) => {
         const sourcePath = await this.paths.assertOwnedRegularFile(
           selection.asset.sourceRelativePath,
           { scope: 'originals', assetId: selection.asset.id }
@@ -83,6 +86,12 @@ export class LocalPosterGenerator {
           dataUrl: `${PNG_DATA_URL_PREFIX}${rendered.png.toString('base64')}`
         } satisfies LocalPosterCandidateDto
       }))
+      const failedCandidate = renderedCandidates.find(({ status }) => status === 'rejected')
+      if (failedCandidate?.status === 'rejected') throw failedCandidate.reason
+      const candidates = renderedCandidates.map((result) => {
+        if (result.status === 'rejected') throw result.reason
+        return result.value
+      })
       const totalReadyAssets = this.repository.countReady()
       return {
         ok: true,

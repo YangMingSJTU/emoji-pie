@@ -11,6 +11,7 @@ import type {
   LocalAssetWorkerPool,
   LocalPosterWorkerRequest
 } from '../src/main/local-asset-worker'
+import { LocalAssetWorkerError } from '../src/main/local-asset-worker'
 
 const temporaryDirectories: string[] = []
 const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1])
@@ -228,6 +229,54 @@ describe('LocalPosterGenerator', () => {
       expect(await first).toMatchObject({ ok: true })
     } finally {
       release?.()
+      fixture.repository.close()
+    }
+  })
+
+  it('keeps the global gate until a failed batch drains and then accepts the next batch', async () => {
+    const fixture = await createFixture(3)
+    let releasePending: (() => void) | undefined
+    let reportAllStarted: (() => void) | undefined
+    const pending = new Promise<void>((resolve) => { releasePending = resolve })
+    const allStarted = new Promise<void>((resolve) => { reportAllStarted = resolve })
+    let invocation = 0
+    const render = vi.fn(async () => {
+      const current = invocation
+      invocation += 1
+      if (invocation === 3) reportAllStarted?.()
+      if (current === 0) {
+        throw new LocalAssetWorkerError('generation_failed', 'first poster failed')
+      }
+      if (current < 3) await pending
+      return { png: PNG }
+    })
+    const generator = new LocalPosterGenerator(
+      fixture.repository,
+      fixture.index,
+      fixture.paths,
+      workers(render)
+    )
+    const request = {
+      prompt: 'busy', caption: 'busy', embedCaption: true,
+      matchMode: 'manual' as const,
+      selectedAssetIds: fixture.assets.map(({ id }) => id), excludedAssetIds: []
+    }
+    try {
+      const failedBatch = generator.generate(request)
+      await allStarted
+      expect(await generator.generate(request)).toMatchObject({
+        ok: false, error: { code: 'generation_busy', retryable: true }
+      })
+      releasePending?.()
+      expect(await failedBatch).toMatchObject({
+        ok: false, error: { code: 'generation_failed', retryable: true }
+      })
+      expect(await generator.generate(request)).toMatchObject({
+        ok: true, value: { candidates: [{}, {}, {}] }
+      })
+      expect(render).toHaveBeenCalledTimes(6)
+    } finally {
+      releasePending?.()
       fixture.repository.close()
     }
   })

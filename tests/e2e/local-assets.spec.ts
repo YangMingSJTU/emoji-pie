@@ -1,6 +1,7 @@
 import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { _electron as electron, expect, test } from '@playwright/test'
 import sharp from 'sharp'
+import type { DesktopApi } from '../../src/shared/types'
 
 test('imports, persists, deduplicates and deletes a local asset through the desktop UI', async () => {
   const testInfo = test.info()
@@ -225,6 +226,128 @@ test('recovers the real utility-process queue after two hangs and a crash', asyn
       timeout: 10_000
     })
     await expect(importDialog.getByText(/^已导入 2 张$/u)).toHaveCount(0)
+  } finally {
+    await electronApp.close()
+  }
+})
+
+test('recovers poster rendering after a utility-process timeout and crash', async () => {
+  const testInfo = test.info()
+  const userDataPath = testInfo.outputPath('poster-worker-user-data')
+  const fixturePath = testInfo.outputPath('poster-worker-fixtures')
+  await Promise.all([
+    mkdir(userDataPath, { recursive: true }),
+    mkdir(fixturePath, { recursive: true })
+  ])
+  await Promise.all([
+    sharp({
+      create: { width: 40, height: 30, channels: 4, background: '#aa2200' }
+    }).png().toFile(testInfo.outputPath('poster-worker-fixtures', '01-timeout.png')),
+    sharp({
+      create: { width: 41, height: 31, channels: 4, background: '#22aa00' }
+    }).png().toFile(testInfo.outputPath('poster-worker-fixtures', '02-crash.png')),
+    sharp({
+      create: { width: 42, height: 32, channels: 4, background: '#0022aa' }
+    }).png().toFile(testInfo.outputPath('poster-worker-fixtures', '03-healthy.png'))
+  ])
+  const electronApp = await electron.launch({
+    args: ['.'],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EMOJI_PIE_USER_DATA: userDataPath,
+      EMOJI_PIE_LOCAL_ASSET_FIXTURE_DIR: fixturePath,
+      EMOJI_PIE_LOCAL_ASSET_WORKER_TEST_MODE: '1'
+    }
+  })
+  try {
+    const window = await electronApp.firstWindow()
+    const imported = await window.evaluate(async () => {
+      const api = (globalThis as typeof globalThis & { emojiPie: DesktopApi }).emojiPie
+      const begun = await api.localAssets.beginImport({
+        sourceKind: 'directory',
+        rightsConfirmed: true
+      })
+      if (!begun.ok) return begun
+      let session = begun.value
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const current = await api.localAssets.getImportSession({ sessionId: session.id })
+        if (!current.ok) return current
+        session = current.value
+        if (session.items.every(({ state }) => state === 'staged')) break
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+      if (!session.items.every(({ state }) => state === 'staged')) {
+        throw new Error('poster recovery fixtures did not finish staging')
+      }
+      for (const item of session.items) {
+        const drafted = await api.localAssets.updateImportDraft({
+          sessionId: session.id,
+          itemId: item.id,
+          displayName: item.originalFilename.replace(/\.png$/u, ''),
+          tags: ['recovery']
+        })
+        if (!drafted.ok) return drafted
+      }
+      const finalized = await api.localAssets.finalizeImport({
+        sessionId: session.id,
+        itemIds: session.items.map(({ id }) => id)
+      })
+      if (!finalized.ok) return finalized
+      return api.localAssets.list()
+    })
+    expect(imported).toMatchObject({ ok: true, value: [{}, {}, {}] })
+    if (!imported.ok) throw new Error(imported.error.message)
+    const idByName = new Map(imported.value.map(({ id, originalFilename }) => [originalFilename, id]))
+    const timeoutId = idByName.get('01-timeout.png')
+    const crashId = idByName.get('02-crash.png')
+    const healthyId = idByName.get('03-healthy.png')
+    expect(timeoutId).toBeTruthy()
+    expect(crashId).toBeTruthy()
+    expect(healthyId).toBeTruthy()
+    if (!timeoutId || !crashId || !healthyId) throw new Error('missing poster recovery asset')
+
+    await writeFile(
+      testInfo.outputPath('poster-worker-user-data', 'local-assets', 'originals', `${timeoutId}.png`),
+      'YM10_HANG_POSTER'
+    )
+    const timedOut = await window.evaluate(async (assetId) => {
+      const api = (globalThis as typeof globalThis & { emojiPie: DesktopApi }).emojiPie
+      return api.localAssets.generatePosters({
+        prompt: 'recovery', caption: 'timeout', embedCaption: true,
+        matchMode: 'manual', selectedAssetIds: [assetId], excludedAssetIds: []
+      })
+    }, timeoutId)
+    expect(timedOut).toMatchObject({
+      ok: false, error: { code: 'processing_timeout', retryable: true }
+    })
+
+    await writeFile(
+      testInfo.outputPath('poster-worker-user-data', 'local-assets', 'originals', `${crashId}.png`),
+      'YM10_CRASH_POSTER'
+    )
+    const crashed = await window.evaluate(async (assetId) => {
+      const api = (globalThis as typeof globalThis & { emojiPie: DesktopApi }).emojiPie
+      return api.localAssets.generatePosters({
+        prompt: 'recovery', caption: 'crash', embedCaption: true,
+        matchMode: 'manual', selectedAssetIds: [assetId], excludedAssetIds: []
+      })
+    }, crashId)
+    expect(crashed).toMatchObject({
+      ok: false, error: { code: 'processing_crashed', retryable: true }
+    })
+
+    const recovered = await window.evaluate(async (assetId) => {
+      const api = (globalThis as typeof globalThis & { emojiPie: DesktopApi }).emojiPie
+      return api.localAssets.generatePosters({
+        prompt: 'recovery', caption: 'healthy', embedCaption: true,
+        matchMode: 'manual', selectedAssetIds: [assetId], excludedAssetIds: []
+      })
+    }, healthyId)
+    expect(recovered).toMatchObject({
+      ok: true,
+      value: { candidates: [{ assetId: healthyId, dataUrl: expect.stringMatching(/^data:image\/png;base64,/u) }] }
+    })
   } finally {
     await electronApp.close()
   }
