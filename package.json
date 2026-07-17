@@ -51,6 +51,7 @@
     },
     "files": [
       "out/**/*",
+      "src/main/local-asset-worker-process.cjs",
       "package.json"
     ],
     "icon": "assets/icon.png",
