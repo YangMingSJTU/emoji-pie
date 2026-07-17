@@ -1,3 +1,5 @@
+import type { LocalAssetApi } from './local-assets'
+
 export type GenerationMode = 'express' | 'reply'
 
 export const EMOJI_STYLES = [
@@ -208,4 +210,5 @@ export interface DesktopApi {
     start: (settings: AgentRuntimeSettings) => Promise<AgentRuntimeDescriptor>
     generate: (request: AgentRuntimeGenerateRequest) => Promise<AgentRuntimeGenerationResult>
   }
+  localAssets: LocalAssetApi
 }

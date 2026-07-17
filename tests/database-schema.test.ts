@@ -81,7 +81,7 @@ describe('application database migration', () => {
         source_rel_path, thumbnail_rel_path, state, rights_asserted_at,
         imported_at, updated_at
       ) VALUES (?, '素材 A', '素材 a', 'a.png', 'image/png', 640, 640, 100,
-        ?, ?, ?, ?, 'ready', ?, ?, ?)
+        ?, ?, ?, ?, 'committing', ?, ?, ?)
     `).run(
       assetId,
       'a'.repeat(64),
@@ -96,6 +96,23 @@ describe('application database migration', () => {
       INSERT INTO local_asset_tags (asset_id, display_value, normalized_value, ordinal)
       VALUES (?, '加班', '加班', 0)
     `).run(assetId)
+    database.prepare(`
+      UPDATE local_assets SET state = 'ready' WHERE id = ?
+    `).run(assetId)
+    const insertTag = database.prepare(`
+      INSERT INTO local_asset_tags (asset_id, display_value, normalized_value, ordinal)
+      VALUES (?, ?, ?, ?)
+    `)
+    for (let ordinal = 1; ordinal < 12; ordinal += 1) {
+      insertTag.run(assetId, `标签${ordinal}`, `标签${ordinal}`, ordinal)
+    }
+    expect(() => insertTag.run(assetId, '超限', '超限', 12)).toThrow()
+    database.prepare(`
+      DELETE FROM local_asset_tags WHERE asset_id = ? AND ordinal > 0
+    `).run(assetId)
+    expect(() => database.prepare(`
+      DELETE FROM local_asset_tags WHERE asset_id = ? AND ordinal = 0
+    `).run(assetId)).toThrow()
     expect(() => database.prepare(`
       INSERT INTO local_asset_tags (asset_id, display_value, normalized_value, ordinal)
       VALUES (?, '工作', '工作', 0)

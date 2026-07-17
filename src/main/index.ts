@@ -12,6 +12,10 @@ import type {
 import { isEmojiStyle, normalizeEmojiRenderSettings } from '../shared/types'
 import { countGraphemes, normalizeLocalAssetId } from '../shared/local-assets'
 import { AgentRuntimeManager, normalizeAgentRuntimeSettings } from './agent-runtime'
+import {
+  createUnavailableLocalAssetIpcService,
+  registerLocalAssetIpcHandlers
+} from './local-asset-ipc'
 import { EmojiRepository } from './repository'
 
 const MAX_SAVE_BATCH = 24
@@ -110,6 +114,8 @@ function isInlineEmojiValue(value: unknown): value is string {
 }
 
 function registerIpcHandlers(): void {
+  registerLocalAssetIpcHandlers(ipcMain, createUnavailableLocalAssetIpcService())
+
   ipcMain.handle(IPC_CHANNELS.libraryList, (_event, filter: LibraryFilter = 'all') => {
     return requireRepository().list(filter === 'favorites' ? 'favorites' : 'all')
   })

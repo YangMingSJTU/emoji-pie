@@ -13,6 +13,7 @@ export const LOCAL_ASSET_LIMITS = {
 
 export const LOCAL_ASSET_ERROR_CODES = [
   'invalid_request',
+  'feature_unavailable',
   'invalid_name',
   'tag_count_out_of_range',
   'invalid_tag',
@@ -38,6 +39,9 @@ export const LOCAL_ASSET_ERROR_CODES = [
   'invalid_managed_path',
   'source_unavailable',
   'staging_unavailable',
+  'import_session_not_found',
+  'import_item_not_found',
+  'invalid_import_state',
   'asset_not_found',
   'asset_not_ready',
   'import_failed',
@@ -86,6 +90,7 @@ export interface LocalAssetDto {
   sizeBytes: number
   tags: LocalAssetTagDto[]
   thumbnailUrl: string
+  rightsAssertedAt: string
   importedAt: string
   updatedAt: string
 }
@@ -95,6 +100,12 @@ export interface LocalImportItemDto {
   originalFilename: string
   state: LocalImportItemState
   displayName?: string
+  tags: LocalAssetTagDto[]
+  mimeType?: LocalAssetMimeType
+  width?: number
+  height?: number
+  sizeBytes?: number
+  finalizedAt?: string
   error?: LocalAssetOperationError
   duplicateAssetId?: string
   importedAssetId?: string
@@ -105,6 +116,7 @@ export interface LocalImportSessionDto {
   sourceKind: LocalImportSourceKind
   state: LocalImportSessionState
   items: LocalImportItemDto[]
+  rightsAssertedAt: string
   createdAt: string
   updatedAt: string
 }
@@ -125,6 +137,29 @@ export interface RetryLocalImportItemsRequest {
 
 export interface CancelLocalImportRequest {
   sessionId: string
+}
+
+export interface UpdateLocalImportDraftRequest {
+  sessionId: string
+  itemId: string
+  displayName: string
+  tags: string[]
+}
+
+export interface FinalizeLocalImportRequest {
+  sessionId: string
+  itemIds: string[]
+}
+
+export interface LocalImportFinalizeRejectionDto {
+  itemId: string
+  error: LocalAssetOperationError
+}
+
+export interface LocalImportFinalizeResultDto {
+  session: LocalImportSessionDto
+  finalizedItemIds: string[]
+  rejectedItems: LocalImportFinalizeRejectionDto[]
 }
 
 export interface UpdateLocalAssetMetadataRequest {
@@ -151,6 +186,12 @@ export interface LocalAssetApi {
   cancelImport: (
     request: CancelLocalImportRequest
   ) => Promise<LocalAssetResult<LocalImportSessionDto>>
+  updateImportDraft: (
+    request: UpdateLocalImportDraftRequest
+  ) => Promise<LocalAssetResult<LocalImportItemDto>>
+  finalizeImport: (
+    request: FinalizeLocalImportRequest
+  ) => Promise<LocalAssetResult<LocalImportFinalizeResultDto>>
   updateMetadata: (
     request: UpdateLocalAssetMetadataRequest
   ) => Promise<LocalAssetResult<LocalAssetDto>>

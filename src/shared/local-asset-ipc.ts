@@ -2,11 +2,15 @@ import type {
   BeginLocalImportRequest,
   CancelLocalImportRequest,
   DeleteLocalAssetRequest,
+  FinalizeLocalImportRequest,
   GetLocalImportSessionRequest,
   LocalAssetDto,
   LocalAssetResult,
+  LocalImportFinalizeResultDto,
+  LocalImportItemDto,
   LocalImportSessionDto,
   RetryLocalImportItemsRequest,
+  UpdateLocalImportDraftRequest,
   UpdateLocalAssetMetadataRequest
 } from './local-assets'
 
@@ -16,6 +20,8 @@ export const LOCAL_ASSET_IPC_CHANNELS = {
   getImportSession: 'local-assets:get-import-session',
   retryImportItems: 'local-assets:retry-import-items',
   cancelImport: 'local-assets:cancel-import',
+  updateImportDraft: 'local-assets:update-import-draft',
+  finalizeImport: 'local-assets:finalize-import',
   updateMetadata: 'local-assets:update-metadata',
   delete: 'local-assets:delete'
 } as const
@@ -40,6 +46,14 @@ export interface LocalAssetIpcContract {
   'local-assets:cancel-import': {
     request: [CancelLocalImportRequest]
     response: LocalAssetResult<LocalImportSessionDto>
+  }
+  'local-assets:update-import-draft': {
+    request: [UpdateLocalImportDraftRequest]
+    response: LocalAssetResult<LocalImportItemDto>
+  }
+  'local-assets:finalize-import': {
+    request: [FinalizeLocalImportRequest]
+    response: LocalAssetResult<LocalImportFinalizeResultDto>
   }
   'local-assets:update-metadata': {
     request: [UpdateLocalAssetMetadataRequest]

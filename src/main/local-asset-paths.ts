@@ -1,3 +1,4 @@
+import { lstat, realpath } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { normalizeLocalAssetId } from '../shared/local-assets'
 
@@ -5,8 +6,22 @@ export const LOCAL_ASSET_DIRECTORY = 'local-assets'
 export const LOCAL_ASSET_PATH_SCOPES = ['staging', 'originals', 'thumbnails'] as const
 
 export type LocalAssetPathScope = (typeof LOCAL_ASSET_PATH_SCOPES)[number]
+export type ManagedLocalAssetPath =
+  | { scope: 'originals'; assetId: string; extension: string }
+  | { scope: 'thumbnails'; assetId: string; extension: 'webp' }
+  | { scope: 'staging'; sessionId: string; itemId: string; extension: string }
+export type LocalAssetPathOwner =
+  | { scope: 'originals'; assetId: string }
+  | { scope: 'thumbnails'; assetId: string }
+  | { scope: 'staging'; sessionId: string; itemId: string }
 
 const SUPPORTED_ORIGINAL_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp'])
+const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+const ORIGINAL_PATH_PATTERN = new RegExp(`^originals/(${UUID_SOURCE})\\.(png|jpg|jpeg|webp)$`)
+const THUMBNAIL_PATH_PATTERN = new RegExp(`^thumbnails/(${UUID_SOURCE})\\.webp$`)
+const STAGING_PATH_PATTERN = new RegExp(
+  `^staging/(${UUID_SOURCE})/(${UUID_SOURCE})\\.(png|jpg|jpeg|webp)$`
+)
 
 function normalizeUuid(value: string, label: string): string {
   const normalized = normalizeLocalAssetId(value)
@@ -14,13 +29,28 @@ function normalizeUuid(value: string, label: string): string {
   return normalized
 }
 
+export function parseManagedLocalAssetRelativePath(
+  value: string
+): ManagedLocalAssetPath | undefined {
+  if (!value || isAbsolute(value) || value.includes('\\')) return undefined
+  const original = ORIGINAL_PATH_PATTERN.exec(value)
+  if (original) return { scope: 'originals', assetId: original[1], extension: original[2] }
+  const thumbnail = THUMBNAIL_PATH_PATTERN.exec(value)
+  if (thumbnail) return { scope: 'thumbnails', assetId: thumbnail[1], extension: 'webp' }
+  const staging = STAGING_PATH_PATTERN.exec(value)
+  if (staging) {
+    return {
+      scope: 'staging',
+      sessionId: staging[1],
+      itemId: staging[2],
+      extension: staging[3]
+    }
+  }
+  return undefined
+}
+
 export function isManagedLocalAssetRelativePath(value: string): boolean {
-  if (!value || isAbsolute(value) || value.includes('\\')) return false
-  const parts = value.split('/')
-  if (parts.some((part) => !part || part === '.' || part === '..')) return false
-  if (parts[0] === 'staging') return parts.length === 3
-  if (parts[0] === 'originals' || parts[0] === 'thumbnails') return parts.length === 2
-  return false
+  return parseManagedLocalAssetRelativePath(value) !== undefined
 }
 
 export class LocalAssetPathService {
@@ -51,14 +81,63 @@ export class LocalAssetPathService {
   }
 
   resolve(relativePath: string): string {
-    if (!isManagedLocalAssetRelativePath(relativePath)) {
+    if (!parseManagedLocalAssetRelativePath(relativePath)) {
       throw new Error('Managed local-asset path must be canonical and relative')
     }
-    const absolutePath = resolve(this.rootDirectory, ...relativePath.split('/'))
-    const fromRoot = relative(this.rootDirectory, absolutePath)
-    if (!fromRoot || fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
-      throw new Error('Managed local-asset path escapes its root')
+    return this.resolveContained(relativePath)
+  }
+
+  resolveAssetSource(assetId: string, relativePath: string): string {
+    const ownerId = normalizeUuid(assetId, 'assetId')
+    const parsed = parseManagedLocalAssetRelativePath(relativePath)
+    if (parsed?.scope !== 'originals' || parsed.assetId !== ownerId) {
+      throw new Error('Managed source path does not belong to the asset')
     }
+    return this.resolveContained(relativePath)
+  }
+
+  resolveAssetThumbnail(assetId: string, relativePath: string): string {
+    const ownerId = normalizeUuid(assetId, 'assetId')
+    const parsed = parseManagedLocalAssetRelativePath(relativePath)
+    if (parsed?.scope !== 'thumbnails' || parsed.assetId !== ownerId) {
+      throw new Error('Managed thumbnail path does not belong to the asset')
+    }
+    return this.resolveContained(relativePath)
+  }
+
+  resolveStagingItem(sessionId: string, itemId: string, relativePath: string): string {
+    const ownerSessionId = normalizeUuid(sessionId, 'sessionId')
+    const ownerItemId = normalizeUuid(itemId, 'itemId')
+    const parsed = parseManagedLocalAssetRelativePath(relativePath)
+    if (parsed?.scope !== 'staging' ||
+      parsed.sessionId !== ownerSessionId || parsed.itemId !== ownerItemId) {
+      throw new Error('Managed staging path does not belong to the import item')
+    }
+    return this.resolveContained(relativePath)
+  }
+
+  async assertOwnedRegularFile(
+    relativePath: string,
+    owner: LocalAssetPathOwner
+  ): Promise<string> {
+    const absolutePath = owner.scope === 'staging'
+      ? this.resolveStagingItem(owner.sessionId, owner.itemId, relativePath)
+      : owner.scope === 'originals'
+        ? this.resolveAssetSource(owner.assetId, relativePath)
+        : this.resolveAssetThumbnail(owner.assetId, relativePath)
+    const stat = await lstat(absolutePath)
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('Managed local-asset path must be a regular non-link file')
+    }
+    const canonicalRoot = await realpath(this.rootDirectory)
+    const canonicalFile = await realpath(absolutePath)
+    this.assertContained(canonicalRoot, canonicalFile)
+    return canonicalFile
+  }
+
+  private resolveContained(relativePath: string): string {
+    const absolutePath = resolve(this.rootDirectory, ...relativePath.split('/'))
+    this.assertContained(this.rootDirectory, absolutePath)
     return absolutePath
   }
 
@@ -68,10 +147,17 @@ export class LocalAssetPathService {
     }
     const fromRoot = relative(this.rootDirectory, resolve(absolutePath))
     const canonical = fromRoot.split(sep).join('/')
-    if (!isManagedLocalAssetRelativePath(canonical)) {
+    if (!parseManagedLocalAssetRelativePath(canonical)) {
       throw new Error('Path is outside the managed local-asset root')
     }
     return canonical
+  }
+
+  private assertContained(root: string, target: string): void {
+    const fromRoot = relative(root, target)
+    if (!fromRoot || fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
+      throw new Error('Managed local-asset path escapes its root')
+    }
   }
 
   private normalizeOriginalExtension(extension: string): string {

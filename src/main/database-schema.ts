@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite'
 
-export const APPLICATION_SCHEMA_VERSION = 1
+export const APPLICATION_SCHEMA_VERSION = 2
 
 interface TableColumn {
   name: string
@@ -137,8 +137,13 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
           length(pixel_sha256) = 64 AND pixel_sha256 = lower(pixel_sha256)
             AND pixel_sha256 NOT GLOB '*[^0-9a-f]*'
         ),
-        source_rel_path TEXT NOT NULL,
-        thumbnail_rel_path TEXT NOT NULL,
+        source_rel_path TEXT NOT NULL CHECK (
+          source_rel_path IN ('originals/' || id || '.png', 'originals/' || id || '.jpg',
+            'originals/' || id || '.jpeg', 'originals/' || id || '.webp')
+        ),
+        thumbnail_rel_path TEXT NOT NULL CHECK (
+          thumbnail_rel_path = 'thumbnails/' || id || '.webp'
+        ),
         state TEXT NOT NULL CHECK (state IN ('committing', 'ready')),
         rights_asserted_at TEXT NOT NULL,
         imported_at TEXT NOT NULL,
@@ -156,7 +161,7 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
         asset_id TEXT NOT NULL REFERENCES local_assets(id) ON DELETE CASCADE,
         display_value TEXT NOT NULL,
         normalized_value TEXT NOT NULL,
-        ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+        ordinal INTEGER NOT NULL CHECK (ordinal >= 0 AND ordinal < 12),
         PRIMARY KEY (asset_id, normalized_value),
         UNIQUE (asset_id, ordinal)
       );
@@ -186,7 +191,14 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
         original_filename TEXT NOT NULL CHECK (
           original_filename NOT LIKE '%/%' AND original_filename NOT LIKE '%\\%'
         ),
-        staging_rel_path TEXT,
+        staging_rel_path TEXT CHECK (
+          staging_rel_path IS NULL OR staging_rel_path IN (
+            'staging/' || session_id || '/' || id || '.png',
+            'staging/' || session_id || '/' || id || '.jpg',
+            'staging/' || session_id || '/' || id || '.jpeg',
+            'staging/' || session_id || '/' || id || '.webp'
+          )
+        ),
         display_name TEXT,
         normalized_name TEXT,
         mime_type TEXT,
@@ -201,11 +213,23 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
         error_code TEXT,
         duplicate_asset_id TEXT,
         imported_asset_id TEXT,
+        finalized_at TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_local_import_items_session_state
         ON local_import_items(session_id, state, created_at ASC);
+
+      CREATE TABLE IF NOT EXISTS local_import_item_tags (
+        item_id TEXT NOT NULL REFERENCES local_import_items(id) ON DELETE CASCADE,
+        display_value TEXT NOT NULL CHECK (length(trim(display_value)) > 0),
+        normalized_value TEXT NOT NULL CHECK (length(normalized_value) > 0),
+        ordinal INTEGER NOT NULL CHECK (ordinal >= 0 AND ordinal < 12),
+        PRIMARY KEY (item_id, normalized_value),
+        UNIQUE (item_id, ordinal)
+      );
+      CREATE INDEX IF NOT EXISTS idx_local_import_item_tags_item_ordinal
+        ON local_import_item_tags(item_id, ordinal ASC);
 
       CREATE INDEX IF NOT EXISTS idx_generations_created_at
         ON generations(created_at DESC);
@@ -213,8 +237,157 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
         ON generations(favorite, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_generations_local_asset
         ON generations(local_asset_id, created_at DESC);
-      PRAGMA user_version = ${APPLICATION_SCHEMA_VERSION};
     `)
+
+    const importItemColumns = getColumnNames(database, 'local_import_items')
+    addColumnIfMissing(
+      database,
+      'local_import_items',
+      importItemColumns,
+      'finalized_at',
+      'TEXT'
+    )
+
+    database.exec(`
+      CREATE TRIGGER IF NOT EXISTS trg_local_assets_paths_insert
+      BEFORE INSERT ON local_assets
+      WHEN NEW.source_rel_path NOT IN (
+          'originals/' || NEW.id || '.png', 'originals/' || NEW.id || '.jpg',
+          'originals/' || NEW.id || '.jpeg', 'originals/' || NEW.id || '.webp'
+        ) OR NEW.thumbnail_rel_path != ('thumbnails/' || NEW.id || '.webp')
+      BEGIN
+        SELECT RAISE(ABORT, 'local asset path owner mismatch');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_assets_paths_update
+      BEFORE UPDATE OF id, source_rel_path, thumbnail_rel_path ON local_assets
+      WHEN NEW.source_rel_path NOT IN (
+          'originals/' || NEW.id || '.png', 'originals/' || NEW.id || '.jpg',
+          'originals/' || NEW.id || '.jpeg', 'originals/' || NEW.id || '.webp'
+        ) OR NEW.thumbnail_rel_path != ('thumbnails/' || NEW.id || '.webp')
+      BEGIN
+        SELECT RAISE(ABORT, 'local asset path owner mismatch');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_import_staging_path_insert
+      BEFORE INSERT ON local_import_items
+      WHEN NEW.staging_rel_path IS NOT NULL AND NEW.staging_rel_path NOT IN (
+        'staging/' || NEW.session_id || '/' || NEW.id || '.png',
+        'staging/' || NEW.session_id || '/' || NEW.id || '.jpg',
+        'staging/' || NEW.session_id || '/' || NEW.id || '.jpeg',
+        'staging/' || NEW.session_id || '/' || NEW.id || '.webp'
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'local import staging path owner mismatch');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_import_staging_path_update
+      BEFORE UPDATE OF id, session_id, staging_rel_path ON local_import_items
+      WHEN NEW.staging_rel_path IS NOT NULL AND NEW.staging_rel_path NOT IN (
+        'staging/' || NEW.session_id || '/' || NEW.id || '.png',
+        'staging/' || NEW.session_id || '/' || NEW.id || '.jpg',
+        'staging/' || NEW.session_id || '/' || NEW.id || '.jpeg',
+        'staging/' || NEW.session_id || '/' || NEW.id || '.webp'
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'local import staging path owner mismatch');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_import_finalize_insert
+      BEFORE INSERT ON local_import_items
+      WHEN NEW.state IN ('committing', 'ready')
+      BEGIN
+        SELECT RAISE(ABORT, 'local import item must be finalized before commit');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_import_finalize_update
+      BEFORE UPDATE OF state, finalized_at ON local_import_items
+      WHEN NEW.state IN ('committing', 'ready') AND (
+        NEW.finalized_at IS NULL OR
+        (SELECT COUNT(*) FROM local_import_item_tags WHERE item_id = NEW.id) NOT BETWEEN 1 AND 12
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'local import item requires finalized metadata and tags');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_assets_ready_insert
+      BEFORE INSERT ON local_assets
+      WHEN NEW.state = 'ready'
+      BEGIN
+        SELECT RAISE(ABORT, 'local asset must enter through committing state');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_assets_ready_update
+      BEFORE UPDATE OF state ON local_assets
+      WHEN NEW.state = 'ready' AND (
+        SELECT COUNT(*) FROM local_asset_tags WHERE asset_id = NEW.id
+      ) NOT BETWEEN 1 AND 12
+      BEGIN
+        SELECT RAISE(ABORT, 'ready local asset requires 1-12 tags');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_asset_tags_max_insert
+      BEFORE INSERT ON local_asset_tags
+      WHEN (SELECT COUNT(*) FROM local_asset_tags WHERE asset_id = NEW.asset_id) >= 12
+      BEGIN
+        SELECT RAISE(ABORT, 'local asset supports at most 12 tags');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_asset_tags_ready_delete
+      BEFORE DELETE ON local_asset_tags
+      WHEN (SELECT state FROM local_assets WHERE id = OLD.asset_id) = 'ready' AND
+        (SELECT COUNT(*) FROM local_asset_tags WHERE asset_id = OLD.asset_id) <= 1
+      BEGIN
+        SELECT RAISE(ABORT, 'ready local asset requires at least one tag');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_import_tags_finalized_insert
+      BEFORE INSERT ON local_import_item_tags
+      WHEN (SELECT state FROM local_import_items WHERE id = NEW.item_id) IN ('committing', 'ready')
+      BEGIN
+        SELECT RAISE(ABORT, 'finalized import tags are immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_import_tags_finalized_update
+      BEFORE UPDATE ON local_import_item_tags
+      WHEN (SELECT state FROM local_import_items WHERE id = OLD.item_id) IN ('committing', 'ready')
+        OR (SELECT state FROM local_import_items WHERE id = NEW.item_id) IN ('committing', 'ready')
+      BEGIN
+        SELECT RAISE(ABORT, 'finalized import tags are immutable');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_import_tags_finalized_delete
+      BEFORE DELETE ON local_import_item_tags
+      WHEN (SELECT state FROM local_import_items WHERE id = OLD.item_id) IN ('committing', 'ready')
+      BEGIN
+        SELECT RAISE(ABORT, 'finalized import tags are immutable');
+      END;
+    `)
+
+    const invalidAssetPath = database.prepare(`
+      SELECT 1 FROM local_assets
+      WHERE source_rel_path NOT IN (
+        'originals/' || id || '.png', 'originals/' || id || '.jpg',
+        'originals/' || id || '.jpeg', 'originals/' || id || '.webp'
+      ) OR thumbnail_rel_path != ('thumbnails/' || id || '.webp')
+      LIMIT 1
+    `).get()
+    const invalidStagingPath = database.prepare(`
+      SELECT 1 FROM local_import_items
+      WHERE staging_rel_path IS NOT NULL AND staging_rel_path NOT IN (
+        'staging/' || session_id || '/' || id || '.png',
+        'staging/' || session_id || '/' || id || '.jpg',
+        'staging/' || session_id || '/' || id || '.jpeg',
+        'staging/' || session_id || '/' || id || '.webp'
+      ) LIMIT 1
+    `).get()
+    const invalidReadyAsset = database.prepare(`
+      SELECT 1 FROM local_assets
+      WHERE state = 'ready' AND (
+        SELECT COUNT(*) FROM local_asset_tags WHERE asset_id = local_assets.id
+      ) NOT BETWEEN 1 AND 12
+      LIMIT 1
+    `).get()
+    const invalidAssetTag = database.prepare(`
+      SELECT 1 FROM local_asset_tags
+      WHERE ordinal NOT BETWEEN 0 AND 11
+      GROUP BY asset_id
+      HAVING COUNT(*) > 12 OR MIN(ordinal) < 0 OR MAX(ordinal) > 11
+      LIMIT 1
+    `).get()
+    if (invalidAssetPath || invalidStagingPath || invalidReadyAsset || invalidAssetTag) {
+      throw new Error('Existing local asset data violates schema v2 ownership or tag constraints')
+    }
+
+    database.exec(`PRAGMA user_version = ${APPLICATION_SCHEMA_VERSION}`)
     database.exec('COMMIT')
   } catch (error) {
     database.exec('ROLLBACK')
