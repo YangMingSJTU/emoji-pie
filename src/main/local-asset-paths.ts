@@ -1,5 +1,5 @@
 import { lstat, realpath } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { normalizeLocalAssetId } from '../shared/local-assets'
 
 export const LOCAL_ASSET_DIRECTORY = 'local-assets'
@@ -86,9 +86,14 @@ export class LocalAssetPathService {
     return this.resolveInternal(`staging/${session}/${item}.thumbnail.webp`)
   }
 
-  deletionStagingPath(assetId: string, kind: 'source' | 'thumbnail'): string {
+  deletionStagingPath(
+    assetId: string,
+    operationId: string,
+    kind: 'source' | 'thumbnail'
+  ): string {
     const asset = normalizeUuid(assetId, 'assetId')
-    return this.resolveInternal(`staging/deletions/${asset}.${kind}`)
+    const operation = normalizeUuid(operationId, 'operationId')
+    return this.resolveInternal(`staging/deletions/${asset}.${operation}.${kind}`)
   }
 
   resolve(relativePath: string): string {
@@ -144,6 +149,33 @@ export class LocalAssetPathService {
     const canonicalFile = await realpath(absolutePath)
     this.assertContained(canonicalRoot, canonicalFile)
     return canonicalFile
+  }
+
+  async assertInternalRegularFile(absolutePath: string): Promise<string> {
+    const lexicalPath = resolve(absolutePath)
+    this.assertContained(this.rootDirectory, lexicalPath)
+    const stat = await lstat(lexicalPath)
+    if (!stat.isFile() || stat.isSymbolicLink()) {
+      throw new Error('Internal local-asset path must be a regular non-link file')
+    }
+    const canonicalRoot = await realpath(this.rootDirectory)
+    const canonicalFile = await realpath(lexicalPath)
+    this.assertContained(canonicalRoot, canonicalFile)
+    return canonicalFile
+  }
+
+  async assertCanonicalParent(absolutePath: string): Promise<string> {
+    const lexicalPath = resolve(absolutePath)
+    this.assertContained(this.rootDirectory, lexicalPath)
+    const lexicalParent = dirname(lexicalPath)
+    const stat = await lstat(lexicalParent)
+    if (!stat.isDirectory() || stat.isSymbolicLink()) {
+      throw new Error('Managed local-asset parent must be a regular directory')
+    }
+    const canonicalRoot = await realpath(this.rootDirectory)
+    const canonicalParent = await realpath(lexicalParent)
+    this.assertContained(canonicalRoot, canonicalParent)
+    return canonicalParent
   }
 
   private resolveContained(relativePath: string): string {

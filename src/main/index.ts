@@ -16,7 +16,11 @@ import { registerLocalAssetIpcHandlers } from './local-asset-ipc'
 import { LocalAssetIndex } from './local-asset-index'
 import { LocalAssetService } from './local-asset-importer'
 import { LocalAssetPathService } from './local-asset-paths'
-import { ElectronLocalAssetPicker, FixedDirectoryLocalAssetPicker } from './local-asset-picker'
+import {
+  ElectronLocalAssetPicker,
+  FailingLocalAssetPicker,
+  FixedDirectoryLocalAssetPicker
+} from './local-asset-picker'
 import { createLocalAssetProtocolHandler, LOCAL_ASSET_PROTOCOL, localAssetThumbnailUrl } from './local-asset-protocol'
 import { LocalAssetRepository } from './local-asset-repository'
 import { ElectronSharpUtilityProcessPool } from './local-asset-utility-pool'
@@ -294,16 +298,24 @@ if (!hasSingleInstanceLock) {
     const fixtureDirectory = !app.isPackaged
       ? process.env.EMOJI_PIE_LOCAL_ASSET_FIXTURE_DIR
       : undefined
-    const localAssetPicker = fixtureDirectory
-      ? new FixedDirectoryLocalAssetPicker(fixtureDirectory)
-      : new ElectronLocalAssetPicker(() => mainWindow)
+    const fixtureError = !app.isPackaged
+      ? process.env.EMOJI_PIE_LOCAL_ASSET_FIXTURE_ERROR
+      : undefined
+    const localAssetPicker = fixtureError === 'permission_denied' || fixtureError === 'read_failed'
+      ? new FailingLocalAssetPicker(fixtureError)
+      : fixtureDirectory
+        ? new FixedDirectoryLocalAssetPicker(fixtureDirectory)
+        : new ElectronLocalAssetPicker(() => mainWindow)
     localAssetService = new LocalAssetService(
       localAssetRepository,
       new LocalAssetIndex(),
       localAssetPaths,
       localAssetPicker,
       new ElectronSharpUtilityProcessPool(
-        join(app.getAppPath(), 'src', 'main', 'local-asset-worker-process.cjs')
+        join(app.getAppPath(), 'src', 'main', 'local-asset-worker-process.cjs'),
+        2,
+        3_000,
+        !app.isPackaged && process.env.EMOJI_PIE_LOCAL_ASSET_WORKER_TEST_MODE === '1'
       )
     )
     await localAssetService.initialize()

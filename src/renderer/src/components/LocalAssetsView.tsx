@@ -18,6 +18,7 @@ import {
   type LocalImportSourceKind
 } from '../../../shared/local-assets'
 import { desktopApi } from '../lib/desktop-api'
+import { isLocalImportFullyComplete } from '../lib/local-import-state'
 import type { ToastKind } from './Toast'
 
 interface LocalAssetsViewProps {
@@ -56,6 +57,7 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
   const [rightsSource, setRightsSource] = useState<LocalImportSourceKind | null>(null)
   const [rightsConfirmed, setRightsConfirmed] = useState(false)
   const [session, setSession] = useState<LocalImportSessionDto | null>(null)
+  const [rightsError, setRightsError] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, DraftValue>>({})
   const [busy, setBusy] = useState(false)
   const [completedCount, setCompletedCount] = useState<number | null>(null)
@@ -134,19 +136,28 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
     if (!rightsSource || !rightsConfirmed) return
     setBusy(true)
     try {
+      setRightsError(null)
       const result = await desktopApi.localAssets.beginImport({
         sourceKind: rightsSource,
         rightsConfirmed: true
       })
       if (!result.ok) {
-        if (result.error.code !== 'cancelled') onNotice(result.error.message, 'error')
-        setRightsSource(null)
+        if (result.error.code === 'cancelled') {
+          setRightsSource(null)
+          setRightsConfirmed(false)
+        } else {
+          setRightsError(result.error.message)
+          onNotice(result.error.message, 'error')
+        }
         return
       }
       setSession(result.value)
       setDrafts(Object.fromEntries(result.value.items.map((item) => [item.id, itemDraft(item)])))
       setRightsSource(null)
       setRightsConfirmed(false)
+    } catch {
+      setRightsError('无法读取所选图片，请检查访问权限后重试')
+      onNotice('无法读取所选图片，请检查访问权限后重试', 'error')
     } finally {
       setBusy(false)
     }
@@ -157,7 +168,7 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
     setBusy(true)
     try {
       for (const item of stagedItems) {
-        const draft = drafts[item.id]
+        const draft = drafts[item.id] ?? itemDraft(item)
         const updated = await desktopApi.localAssets.updateImportDraft({
           sessionId: session.id,
           itemId: item.id,
@@ -178,9 +189,19 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
         return
       }
       setSession(result.value.session)
-      setCompletedCount(result.value.finalizedItemIds.length)
+      if (isLocalImportFullyComplete(result.value)) {
+        setCompletedCount(result.value.finalizedItemIds.length)
+      } else {
+        setCompletedCount(null)
+      }
       await loadAssets()
-      onNotice(`已导入 ${result.value.finalizedItemIds.length} 张本地素材`)
+      const rejectedCount = new Set([
+        ...result.value.rejectedItems.map((rejection) => rejection.itemId),
+        ...result.value.session.items.filter((item) => item.state === 'failed').map((item) => item.id)
+      ]).size
+      onNotice(rejectedCount > 0
+        ? `已导入 ${result.value.finalizedItemIds.length} 张，${rejectedCount} 张需处理`
+        : `已导入 ${result.value.finalizedItemIds.length} 张本地素材`, rejectedCount > 0 ? 'error' : undefined)
     } finally {
       setBusy(false)
     }
@@ -211,8 +232,14 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
         sessionId: session.id,
         itemIds
       })
-      if (!result.ok) onNotice(result.error.message, 'error')
-      else setSession(result.value)
+      if (!result.ok) {
+        onNotice(result.error.message, 'error')
+        setCompletedCount(null)
+      }
+      else {
+        setCompletedCount(null)
+        setSession(result.value)
+      }
     } finally {
       setBusy(false)
     }
@@ -355,6 +382,7 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
               />
               <span>我拥有这些图片，或已获得使用这些图片的权限。</span>
             </label>
+            {rightsError && <p role="alert">{rightsError}</p>}
             <div className="dialog-actions">
               <button type="button" onClick={() => setRightsSource(null)}>取消</button>
               <button type="button" disabled={!rightsConfirmed || busy} onClick={() => void beginImport()}>

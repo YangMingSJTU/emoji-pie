@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /* global process, require */
 const { createHash } = require('node:crypto')
+const { readFile } = require('node:fs/promises')
 const sharp = require('sharp')
 
 const MAX_EDGE = 8192
@@ -22,6 +23,14 @@ function mimeForFormat(format) {
 process.parentPort.on('message', async ({ data }) => {
   const { jobId, filePath } = data
   try {
+    if (process.env.EMOJI_PIE_LOCAL_ASSET_WORKER_TEST_MODE === '1') {
+      const marker = await readFile(filePath, 'utf8').catch(() => '')
+      if (marker.startsWith('YM10_HANG')) return
+      if (marker.startsWith('YM10_CRASH')) {
+        process.exit(17)
+        return
+      }
+    }
     const metadata = await sharp(filePath, {
       animated: true,
       failOn: 'error',

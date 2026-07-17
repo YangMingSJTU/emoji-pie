@@ -318,6 +318,12 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
       BEGIN
         SELECT RAISE(ABORT, 'ready local asset requires 1-12 tags');
       END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_assets_capacity_insert
+      BEFORE INSERT ON local_assets
+      WHEN (SELECT COUNT(*) FROM local_assets) >= 500
+      BEGIN
+        SELECT RAISE(ABORT, 'local asset capacity reached');
+      END;
       CREATE TRIGGER IF NOT EXISTS trg_local_asset_tags_max_insert
       BEFORE INSERT ON local_asset_tags
       WHEN (SELECT COUNT(*) FROM local_asset_tags WHERE asset_id = NEW.asset_id) >= 12

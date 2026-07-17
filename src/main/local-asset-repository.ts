@@ -1,5 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import {
+  LOCAL_ASSET_LIMITS,
   normalizeLocalAssetText,
   validateLocalAssetMetadata,
   type LocalAssetDto,
@@ -76,6 +77,13 @@ function failure<T>(
   retryable = false
 ): LocalAssetResult<T> {
   return { ok: false, error: { code, message, retryable } }
+}
+
+export class LocalAssetRepositoryError extends Error {
+  constructor(readonly code: LocalAssetErrorCode, message: string) {
+    super(message)
+    this.name = 'LocalAssetRepositoryError'
+  }
 }
 
 export class LocalAssetRepository {
@@ -318,7 +326,7 @@ export class LocalAssetRepository {
       SET state = 'duplicate', error_code = ?, duplicate_asset_id = ?,
         content_sha256 = ?, pixel_sha256 = COALESCE(?, pixel_sha256),
         staging_rel_path = NULL, updated_at = ?
-      WHERE id = ?
+      WHERE id = ? AND state = 'processing'
     `).run(
       code,
       duplicateAssetId ?? null,
@@ -356,6 +364,15 @@ export class LocalAssetRepository {
     const tags = this.readImportTags(item.id)
     const timestamp = this.now()
     this.transaction(() => {
+      const storedCount = (this.database.prepare(`
+        SELECT COUNT(*) AS count FROM local_assets
+      `).get() as { count: number }).count
+      if (storedCount >= LOCAL_ASSET_LIMITS.maxReadyAssets) {
+        throw new LocalAssetRepositoryError(
+          'library_capacity_reached',
+          '本地素材库已达到 500 张上限'
+        )
+      }
       this.database.prepare(`
         INSERT INTO local_assets (
           id, display_name, normalized_name, original_filename, mime_type, width,
