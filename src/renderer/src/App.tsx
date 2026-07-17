@@ -281,7 +281,9 @@ export default function App(): React.JSX.Element {
           ? {
               local: {
                 matchMode: localMatchMode,
-                selectedAssetIds: [...selectedLocalAssetIds],
+                selectedAssetIds: localMatchMode === 'manual'
+                  ? [...selectedLocalAssetIds]
+                  : [],
                 shownAssetIds: []
               }
             }
@@ -313,12 +315,15 @@ export default function App(): React.JSX.Element {
             generationNonce,
             { analysis: nextAnalysis }
           )[0]
+          const selectedAssetIds = request.local.matchMode === 'manual'
+            ? [...request.local.selectedAssetIds]
+            : []
           const generated = await desktopApi.localAssets.generatePosters({
             prompt: normalizedPrompt,
             caption: captionSpec.caption,
             embedCaption: request.renderSettings.embedCaption,
             matchMode: request.local.matchMode,
-            selectedAssetIds: [...request.local.selectedAssetIds],
+            selectedAssetIds,
             excludedAssetIds: request.local.matchMode === 'automatic'
               ? [...request.local.shownAssetIds]
               : []
@@ -339,7 +344,7 @@ export default function App(): React.JSX.Element {
             renderSettings: { ...request.renderSettings },
             local: {
               matchMode: request.local.matchMode,
-              selectedAssetIds: [...request.local.selectedAssetIds],
+              selectedAssetIds,
               shownAssetIds: nextShownAssetIds
             }
           }
@@ -720,6 +725,7 @@ export default function App(): React.JSX.Element {
                   onMatchModeChange={(nextMode) => {
                     if (nextMode === localMatchMode) return
                     setLocalMatchMode(nextMode)
+                    if (nextMode === 'automatic') setSelectedLocalAssetIds([])
                     setResults([])
                     setGenerationHint(null)
                     activeBatchRef.current = null

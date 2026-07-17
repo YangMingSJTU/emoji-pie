@@ -116,6 +116,105 @@ test('imports, persists, deduplicates and deletes a local asset through the desk
   }
 })
 
+test('clears a manual selection before consecutive automatic keyboard generations', async () => {
+  const testInfo = test.info()
+  const userDataPath = testInfo.outputPath('automatic-transition-user-data')
+  const fixturePath = testInfo.outputPath('automatic-transition-fixtures')
+  const sourcePath = testInfo.outputPath(
+    'automatic-transition-fixtures',
+    '自动匹配回归.png'
+  )
+  await Promise.all([
+    mkdir(userDataPath, { recursive: true }),
+    mkdir(fixturePath, { recursive: true })
+  ])
+  await sharp({
+    create: { width: 64, height: 48, channels: 4, background: '#3584e4' }
+  }).png().toFile(sourcePath)
+
+  const electronApp = await electron.launch({
+    args: ['.'],
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      EMOJI_PIE_USER_DATA: userDataPath,
+      EMOJI_PIE_LOCAL_ASSET_FIXTURE_DIR: fixturePath
+    }
+  })
+
+  try {
+    const window = await electronApp.firstWindow()
+    const imported = await window.evaluate(async () => {
+      const api = (globalThis as typeof globalThis & { emojiPie: DesktopApi }).emojiPie
+      const begun = await api.localAssets.beginImport({
+        sourceKind: 'directory',
+        rightsConfirmed: true
+      })
+      if (!begun.ok) return begun
+      let session = begun.value
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const current = await api.localAssets.getImportSession({ sessionId: session.id })
+        if (!current.ok) return current
+        session = current.value
+        if (session.items.every(({ state }) => state === 'staged')) break
+        await new Promise((resolve) => setTimeout(resolve, 25))
+      }
+      if (!session.items.every(({ state }) => state === 'staged')) {
+        throw new Error('automatic transition fixture did not finish staging')
+      }
+      const [item] = session.items
+      const drafted = await api.localAssets.updateImportDraft({
+        sessionId: session.id,
+        itemId: item.id,
+        displayName: '自动匹配回归',
+        tags: ['自动', '回归']
+      })
+      if (!drafted.ok) return drafted
+      return api.localAssets.finalizeImport({
+        sessionId: session.id,
+        itemIds: [item.id]
+      })
+    })
+    expect(imported).toMatchObject({ ok: true })
+
+    const prompt = window.getByLabel('表情文案')
+    await prompt.fill('自动回归')
+    await window.getByRole('radio', { name: '表情海报' }).click()
+    await window.getByRole('radio', { name: '本地素材' }).click()
+    await expect(window.getByText('共 1 张 · 本机匹配')).toBeVisible()
+
+    await window.getByRole('radio', { name: '手动选图' }).click()
+    await window.getByRole('button', { name: '选择素材' }).click()
+    const picker = window.getByRole('dialog', { name: '手动选择本地素材' })
+    await picker.getByRole('checkbox').check()
+    await picker.getByRole('button', { name: '确认选择 1 张' }).click()
+    await expect(window.getByText('已选 1/9 张，结果按选择顺序生成。')).toBeVisible()
+
+    const automaticMode = window.getByRole('radio', { name: '自动匹配' })
+    await automaticMode.click()
+    await expect(automaticMode).toHaveAttribute('aria-checked', 'true')
+
+    const generateButton = window.getByRole('button', { name: '用本地素材生成' })
+    await generateButton.focus()
+    await generateButton.press('Enter')
+    await expect(window.getByLabel('生成结果').getByTestId('emoji-card')).toHaveCount(1, {
+      timeout: 10_000
+    })
+
+    await prompt.fill('自动回归相邻路径')
+    await generateButton.focus()
+    await generateButton.press('Enter')
+    await expect(window.getByRole('heading', { name: '为“自动回归相邻路径”生成' }))
+      .toBeVisible({ timeout: 10_000 })
+
+    await window.getByRole('navigation', { name: '主导航' })
+      .getByRole('button', { name: '最近生成' }).click()
+    await expect(window.getByTestId('emoji-card')).toHaveCount(2)
+  } finally {
+    await electronApp.close()
+  }
+})
+
 test('keeps picker permission failures retryable inside the real DesktopApi boundary', async () => {
   const testInfo = test.info()
   const userDataPath = testInfo.outputPath('permission-user-data')
