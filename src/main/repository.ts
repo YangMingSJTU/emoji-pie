@@ -1,5 +1,7 @@
 import { DatabaseSync } from 'node:sqlite'
+import { countGraphemes, normalizeLocalAssetId } from '../shared/local-assets'
 import { isEmojiStyle, type EmojiRecord, type LibraryFilter } from '../shared/types'
+import { migrateApplicationDatabase } from './database-schema'
 
 interface StoredEmojiRow {
   id: string
@@ -14,6 +16,11 @@ interface StoredEmojiRow {
   image: Uint8Array
   favorite: number
   created_at: string
+  local_asset_id: string | null
+  local_asset_name_snapshot: string | null
+  local_match_mode: string | null
+  background_source: string
+  local_source_available: number
 }
 
 const DATA_URL_PREFIX = 'data:image/png;base64,'
@@ -32,7 +39,7 @@ function decodePng(dataUrl: string): Buffer {
 }
 
 function mapRow(row: StoredEmojiRow): EmojiRecord {
-  return {
+  const record: EmojiRecord = {
     id: row.id,
     prompt: row.prompt,
     mode: row.mode,
@@ -46,6 +53,20 @@ function mapRow(row: StoredEmojiRow): EmojiRecord {
     favorite: row.favorite === 1,
     createdAt: row.created_at
   }
+  if (
+    row.background_source === 'local' &&
+    row.local_asset_id &&
+    row.local_asset_name_snapshot &&
+    (row.local_match_mode === 'automatic' || row.local_match_mode === 'manual')
+  ) {
+    record.localSource = {
+      assetId: row.local_asset_id,
+      assetNameSnapshot: row.local_asset_name_snapshot,
+      matchMode: row.local_match_mode,
+      sourceDeleted: row.local_source_available !== 1
+    }
+  }
+  return record
 }
 
 export class EmojiRepository {
@@ -53,50 +74,32 @@ export class EmojiRepository {
 
   constructor(databasePath: string) {
     this.database = new DatabaseSync(databasePath)
-    this.database.exec(`
-      PRAGMA journal_mode = WAL;
-      PRAGMA foreign_keys = ON;
-      CREATE TABLE IF NOT EXISTS generations (
-        id TEXT PRIMARY KEY,
-        prompt TEXT NOT NULL,
-        mode TEXT NOT NULL,
-        style TEXT NOT NULL,
-        layout TEXT NOT NULL DEFAULT 'poster',
-        embed_caption INTEGER NOT NULL DEFAULT 1,
-        emotion TEXT NOT NULL,
-        caption TEXT NOT NULL,
-        seed INTEGER NOT NULL,
-        image BLOB NOT NULL,
-        favorite INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_generations_created_at
-        ON generations(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_generations_favorite
-        ON generations(favorite, created_at DESC);
-      CREATE TABLE IF NOT EXISTS preferences (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `)
-    const columns = this.database
-      .prepare('PRAGMA table_info(generations)')
-      .all() as unknown as Array<{ name: string }>
-    const columnNames = new Set(columns.map(({ name }) => name))
-    if (!columnNames.has('layout')) {
-      this.database.exec("ALTER TABLE generations ADD COLUMN layout TEXT NOT NULL DEFAULT 'poster'")
-    }
-    if (!columnNames.has('embed_caption')) {
-      this.database.exec('ALTER TABLE generations ADD COLUMN embed_caption INTEGER NOT NULL DEFAULT 1')
+    try {
+      migrateApplicationDatabase(this.database)
+      this.database.exec('PRAGMA journal_mode = WAL;')
+    } catch (error) {
+      this.database.close()
+      throw error
     }
   }
 
   list(filter: LibraryFilter = 'all'): EmojiRecord[] {
     const statement = this.database.prepare(
       filter === 'favorites'
-        ? `SELECT * FROM generations WHERE favorite = 1 ORDER BY created_at DESC LIMIT 240`
-        : `SELECT * FROM generations ORDER BY created_at DESC LIMIT 240`
+        ? `SELECT generations.*, CASE
+             WHEN local_asset_id IS NOT NULL AND EXISTS (
+               SELECT 1 FROM local_assets
+               WHERE local_assets.id = generations.local_asset_id
+                 AND local_assets.state = 'ready'
+             ) THEN 1 ELSE 0 END AS local_source_available
+           FROM generations WHERE favorite = 1 ORDER BY created_at DESC LIMIT 240`
+        : `SELECT generations.*, CASE
+             WHEN local_asset_id IS NOT NULL AND EXISTS (
+               SELECT 1 FROM local_assets
+               WHERE local_assets.id = generations.local_asset_id
+                 AND local_assets.state = 'ready'
+             ) THEN 1 ELSE 0 END AS local_source_available
+           FROM generations ORDER BY created_at DESC LIMIT 240`
     )
     return (statement.all() as unknown as StoredEmojiRow[]).map(mapRow)
   }
@@ -105,8 +108,9 @@ export class EmojiRepository {
     const statement = this.database.prepare(`
       INSERT INTO generations (
         id, prompt, mode, style, layout, embed_caption, emotion, caption,
-        seed, image, favorite, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        seed, image, favorite, created_at, local_asset_id,
+        local_asset_name_snapshot, local_match_mode, background_source
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         prompt = excluded.prompt,
         mode = excluded.mode,
@@ -118,12 +122,26 @@ export class EmojiRepository {
         seed = excluded.seed,
         image = excluded.image,
         favorite = MAX(generations.favorite, excluded.favorite),
-        created_at = excluded.created_at
+        created_at = excluded.created_at,
+        local_asset_id = excluded.local_asset_id,
+        local_asset_name_snapshot = excluded.local_asset_name_snapshot,
+        local_match_mode = excluded.local_match_mode,
+        background_source = excluded.background_source
     `)
 
     this.database.exec('BEGIN')
     try {
       for (const record of records) {
+        const localAssetId = record.localSource
+          ? normalizeLocalAssetId(record.localSource.assetId)
+          : undefined
+        if (record.localSource && (
+          !localAssetId ||
+          countGraphemes(record.localSource.assetNameSnapshot.trim()) < 1 ||
+          countGraphemes(record.localSource.assetNameSnapshot.trim()) > 60
+        )) {
+          throw new Error('本地素材生成快照格式无效')
+        }
         statement.run(
           record.id,
           record.prompt,
@@ -136,7 +154,11 @@ export class EmojiRepository {
           record.seed,
           decodePng(record.dataUrl),
           record.favorite ? 1 : 0,
-          record.createdAt
+          record.createdAt,
+          localAssetId ?? null,
+          record.localSource?.assetNameSnapshot ?? null,
+          record.localSource?.matchMode ?? null,
+          record.localSource ? 'local' : 'original'
         )
       }
       this.database.exec('COMMIT')

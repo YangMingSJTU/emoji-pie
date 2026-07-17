@@ -10,6 +10,7 @@ import type {
   LibraryFilter
 } from '../shared/types'
 import { isEmojiStyle, normalizeEmojiRenderSettings } from '../shared/types'
+import { countGraphemes, normalizeLocalAssetId } from '../shared/local-assets'
 import { AgentRuntimeManager, normalizeAgentRuntimeSettings } from './agent-runtime'
 import { EmojiRepository } from './repository'
 
@@ -27,6 +28,18 @@ if (process.env.EMOJI_PIE_USER_DATA) {
 function isEmojiRecord(record: unknown): record is EmojiRecord {
   if (!record || typeof record !== 'object') return false
   const candidate = record as Partial<EmojiRecord>
+  const hasValidLocalSource = candidate.localSource === undefined || (
+    candidate.localSource !== null &&
+    typeof candidate.localSource === 'object' &&
+    typeof candidate.localSource.assetId === 'string' &&
+    normalizeLocalAssetId(candidate.localSource.assetId) !== undefined &&
+    typeof candidate.localSource.assetNameSnapshot === 'string' &&
+    countGraphemes(candidate.localSource.assetNameSnapshot.trim()) > 0 &&
+    countGraphemes(candidate.localSource.assetNameSnapshot.trim()) <= 60 &&
+    (candidate.localSource.matchMode === 'automatic' ||
+      candidate.localSource.matchMode === 'manual') &&
+    typeof candidate.localSource.sourceDeleted === 'boolean'
+  )
   return (
     typeof candidate.id === 'string' &&
     candidate.id.length <= 120 &&
@@ -38,7 +51,8 @@ function isEmojiRecord(record: unknown): record is EmojiRecord {
     typeof candidate.embedCaption === 'boolean' &&
     typeof candidate.dataUrl === 'string' &&
     typeof candidate.seed === 'number' &&
-    typeof candidate.createdAt === 'string'
+    typeof candidate.createdAt === 'string' &&
+    hasValidLocalSource
   )
 }
 

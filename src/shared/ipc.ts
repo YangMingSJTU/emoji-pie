@@ -16,3 +16,5 @@ export const IPC_CHANNELS = {
   runtimeStart: 'runtime:start',
   runtimeGenerate: 'runtime:generate'
 } as const
+
+export { LOCAL_ASSET_IPC_CHANNELS } from './local-asset-ipc'

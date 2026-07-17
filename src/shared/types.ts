@@ -58,6 +58,13 @@ export type EmotionId =
 
 export type LibraryFilter = 'all' | 'favorites'
 
+export interface LocalGenerationSourceSnapshot {
+  assetId: string
+  assetNameSnapshot: string
+  matchMode: 'automatic' | 'manual'
+  sourceDeleted: boolean
+}
+
 export interface TextAnalysis {
   emotion: EmotionId
   emotionLabel: string
@@ -80,6 +87,7 @@ export interface EmojiRecord {
   dataUrl: string
   favorite: boolean
   createdAt: string
+  localSource?: LocalGenerationSourceSnapshot
 }
 
 export interface AppInfo {
