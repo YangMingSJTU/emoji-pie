@@ -33,6 +33,7 @@ function createService(): LocalAssetIpcService {
     updateImportDraft: vi.fn(async () => failedResult()),
     finalizeImport: vi.fn(async () => failedResult()),
     updateMetadata: vi.fn(async () => failedResult()),
+    generatePosters: vi.fn(async () => failedResult()),
     delete: vi.fn(async () => failedResult())
   }
 }
@@ -57,6 +58,47 @@ describe('local asset typed IPC', () => {
       sessionId: SESSION_ID.toLowerCase(),
       itemIds: [ITEM_ID.toLowerCase()]
     })
+  })
+
+  it('normalizes bounded local generation requests and rejects a tenth manual asset', async () => {
+    const handlers = new Map<string, RegisteredHandler>()
+    const service = createService()
+    registerLocalAssetIpcHandlers({
+      handle: (channel, handler) => handlers.set(channel, handler)
+    }, service)
+
+    await handlers.get(LOCAL_ASSET_IPC_CHANNELS.generatePosters)?.(undefined, {
+      prompt: '  今天加班  ',
+      caption: '加班',
+      embedCaption: true,
+      matchMode: 'manual',
+      selectedAssetIds: [SESSION_ID],
+      excludedAssetIds: [],
+      managedSourcePath: 'D:\\must-not-cross-ipc.png'
+    })
+    expect(service.generatePosters).toHaveBeenCalledWith({
+      prompt: '今天加班',
+      caption: '加班',
+      embedCaption: true,
+      matchMode: 'manual',
+      selectedAssetIds: [SESSION_ID.toLowerCase()],
+      excludedAssetIds: []
+    })
+
+    vi.mocked(service.generatePosters).mockClear()
+    const tooMany = Array.from({ length: 10 }, (_, index) =>
+      `123e4567-e89b-42d3-a456-${index.toString(16).padStart(12, '0')}`
+    )
+    const rejected = await handlers.get(LOCAL_ASSET_IPC_CHANNELS.generatePosters)?.(undefined, {
+      prompt: '加班',
+      caption: '加班',
+      embedCaption: true,
+      matchMode: 'manual',
+      selectedAssetIds: tooMany,
+      excludedAssetIds: []
+    })
+    expect(rejected).toMatchObject({ ok: false, error: { code: 'invalid_request' } })
+    expect(service.generatePosters).not.toHaveBeenCalled()
   })
 
   it('rejects malformed and duplicate item requests before invoking the service', async () => {

@@ -16,6 +16,7 @@ import {
   type CancelLocalImportRequest,
   type DeleteLocalAssetRequest,
   type FinalizeLocalImportRequest,
+  type GenerateLocalPostersRequest,
   type GetLocalImportSessionRequest,
   type LocalAssetDto,
   type LocalAssetErrorCode,
@@ -23,6 +24,7 @@ import {
   type LocalImportFinalizeResultDto,
   type LocalImportItemDto,
   type LocalImportSessionDto,
+  type LocalPosterBatchDto,
   type RetryLocalImportItemsRequest,
   type UpdateLocalAssetMetadataRequest,
   type UpdateLocalImportDraftRequest
@@ -34,6 +36,7 @@ import {
   type LocalAssetPathOwner
 } from './local-asset-paths'
 import type { LocalAssetPicker, LocalAssetSelectedSource } from './local-asset-picker'
+import { LocalPosterGenerator } from './local-poster-generator'
 import {
   LocalAssetRepository,
   LocalAssetRepositoryError,
@@ -108,6 +111,7 @@ const DEFAULT_DELETION_FILE_OPERATIONS: LocalAssetDeletionFileOperations = {
 
 export class LocalAssetService implements LocalAssetIpcService {
   private readonly backgroundTasks = new Set<Promise<void>>()
+  private readonly posterGenerator: LocalPosterGenerator
   private readonly sessionTasks = new Map<string, Set<Promise<void>>>()
   private readonly abortedSessions = new Set<string>()
 
@@ -119,7 +123,9 @@ export class LocalAssetService implements LocalAssetIpcService {
     private readonly workers: LocalAssetWorkerPool,
     private readonly now: () => string = () => new Date().toISOString(),
     private readonly deletionFiles = DEFAULT_DELETION_FILE_OPERATIONS
-  ) {}
+  ) {
+    this.posterGenerator = new LocalPosterGenerator(repository, index, paths, workers)
+  }
 
   async initialize(): Promise<void> {
     await Promise.all([
@@ -268,6 +274,12 @@ export class LocalAssetService implements LocalAssetIpcService {
     const result = this.repository.updateMetadata(request)
     if (result.ok) this.index.upsert(result.value)
     return result
+  }
+
+  async generatePosters(
+    request: GenerateLocalPostersRequest
+  ): Promise<LocalAssetResult<LocalPosterBatchDto>> {
+    return this.posterGenerator.generate(request)
   }
 
   async delete(request: DeleteLocalAssetRequest): Promise<LocalAssetResult<void>> {

@@ -3,12 +3,14 @@ import type {
   CancelLocalImportRequest,
   DeleteLocalAssetRequest,
   FinalizeLocalImportRequest,
+  GenerateLocalPostersRequest,
   GetLocalImportSessionRequest,
   LocalAssetDto,
   LocalAssetResult,
   LocalImportFinalizeResultDto,
   LocalImportItemDto,
   LocalImportSessionDto,
+  LocalPosterBatchDto,
   RetryLocalImportItemsRequest,
   UpdateLocalImportDraftRequest,
   UpdateLocalAssetMetadataRequest
@@ -23,6 +25,7 @@ export const LOCAL_ASSET_IPC_CHANNELS = {
   updateImportDraft: 'local-assets:update-import-draft',
   finalizeImport: 'local-assets:finalize-import',
   updateMetadata: 'local-assets:update-metadata',
+  generatePosters: 'local-assets:generate-posters',
   delete: 'local-assets:delete'
 } as const
 
@@ -58,6 +61,10 @@ export interface LocalAssetIpcContract {
   'local-assets:update-metadata': {
     request: [UpdateLocalAssetMetadataRequest]
     response: LocalAssetResult<LocalAssetDto>
+  }
+  'local-assets:generate-posters': {
+    request: [GenerateLocalPostersRequest]
+    response: LocalAssetResult<LocalPosterBatchDto>
   }
   'local-assets:delete': {
     request: [DeleteLocalAssetRequest]

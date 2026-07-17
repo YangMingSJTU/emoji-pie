@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/* global process, require */
+/* global Buffer, process, require */
 const { createHash } = require('node:crypto')
 const { readFile } = require('node:fs/promises')
 const sharp = require('sharp')
@@ -20,8 +20,42 @@ function mimeForFormat(format) {
   fail('unsupported_type', '只支持 PNG、JPEG 与静态 WebP')
 }
 
+function escapeXml(value) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
+function captionOverlay(caption) {
+  const segments = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(caption)]
+    .map(({ segment }) => segment)
+  const fontSize = segments.length <= 20 ? 48 : segments.length <= 60 ? 38 : 30
+  const charsPerLine = fontSize === 48 ? 12 : fontSize === 38 ? 16 : 18
+  const lines = []
+  for (let index = 0; index < segments.length; index += charsPerLine) {
+    lines.push(segments.slice(index, index + charsPerLine).join(''))
+  }
+  const lineHeight = Math.ceil(fontSize * 1.3)
+  const bandHeight = Math.max(112, lines.length * lineHeight + 44)
+  const top = 640 - bandHeight
+  const tspans = lines.map((line, index) =>
+    `<tspan x="320" y="${top + 28 + fontSize + index * lineHeight}">${escapeXml(line)}</tspan>`
+  ).join('')
+  return Buffer.from(
+    `<svg width="640" height="640" xmlns="http://www.w3.org/2000/svg">` +
+    `<rect x="0" y="${top}" width="640" height="${bandHeight}" fill="#000" fill-opacity="0.72"/>` +
+    `<text text-anchor="middle" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" ` +
+    `font-size="${fontSize}" font-weight="700" fill="#fff">${tspans}</text></svg>`
+  )
+}
+
 process.parentPort.on('message', async ({ data }) => {
-  const { jobId, filePath } = data
+  const {
+    jobId, filePath, operation = 'inspect', caption = '', embedCaption = false, variant = 0
+  } = data
   try {
     if (process.env.EMOJI_PIE_LOCAL_ASSET_WORKER_TEST_MODE === '1') {
       const marker = await readFile(filePath, 'utf8').catch(() => '')
@@ -30,6 +64,23 @@ process.parentPort.on('message', async ({ data }) => {
         process.exit(17)
         return
       }
+    }
+    if (operation === 'render-poster') {
+      const positions = ['centre', 'north', 'south', 'east', 'west']
+      let pipeline = sharp(filePath, {
+        animated: false,
+        failOn: 'error',
+        limitInputPixels: MAX_PIXELS
+      }).rotate().resize(640, 640, {
+        fit: 'cover',
+        position: positions[Math.abs(variant) % positions.length]
+      })
+      if (embedCaption && caption) {
+        pipeline = pipeline.composite([{ input: captionOverlay(caption), top: 0, left: 0 }])
+      }
+      const poster = await pipeline.png({ compressionLevel: 9 }).toBuffer()
+      process.parentPort.postMessage({ jobId, ok: true, poster })
+      return
     }
     const metadata = await sharp(filePath, {
       animated: true,

@@ -69,6 +69,28 @@ test('imports, persists, deduplicates and deletes a local asset through the desk
     expect(await window.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await window.screenshot({ path: testInfo.outputPath('local-assets-compact.png'), fullPage: true })
 
+    await window.getByRole('button', { name: '生成表情' }).click()
+    await window.getByLabel('表情文案').fill('今天加班')
+    await window.getByRole('radio', { name: '表情海报' }).click()
+    await window.getByRole('radio', { name: '本地素材' }).click()
+    await expect(window.getByText('共 1 张 · 本机匹配')).toBeVisible()
+    await window.getByRole('radio', { name: '手动选图' }).click()
+    await window.getByRole('button', { name: '选择素材' }).click()
+    const posterPicker = window.getByRole('dialog', { name: '手动选择本地素材' })
+    await posterPicker.getByRole('checkbox').check()
+    await posterPicker.getByRole('button', { name: '确认选择 1 张' }).click()
+    await window.getByRole('button', { name: '用本地素材生成' }).click()
+
+    const generatedCard = window.getByTestId('emoji-card')
+    await expect(generatedCard).toHaveCount(1, { timeout: 10_000 })
+    await expect.poll(async () => generatedCard.locator('img').evaluate((image) =>
+      (image as HTMLImageElement).naturalWidth
+    )).toBe(640)
+    await expect(window.getByLabel('生成结果').getByRole('button', { name: '重新选图' })).toBeVisible()
+    await expect(window.getByRole('button', { name: '换一批' })).toHaveCount(0)
+    await generatedCard.getByRole('button', { name: '收藏' }).click()
+
+    await window.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '本地素材' }).click()
     await window.getByRole('button', { name: '编辑 猫猫加班' }).click()
     const editDialog = window.getByRole('dialog', { name: '编辑素材' })
     await editDialog.getByRole('button', { name: '删除素材' }).click()
@@ -76,6 +98,17 @@ test('imports, persists, deduplicates and deletes a local asset through the desk
     await expect(deleteDialog).toContainText('不会删除原始导入文件')
     await deleteDialog.getByRole('button', { name: '删除素材' }).click()
     await expect(window.getByRole('heading', { name: '建立你的本地梗图库' })).toBeVisible()
+
+    await window.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '最近生成' }).click()
+    await expect(window.getByRole('heading', { name: '最近生成' })).toBeVisible()
+    await expect(window.getByText('来自：猫猫加班（源素材已删除）')).toBeVisible()
+    await expect(window.getByRole('button', { name: '再次创作' })).toHaveCount(0)
+    await expect(window.getByTestId('emoji-card')).toHaveCount(1)
+
+    await window.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '我的收藏' }).click()
+    await expect(window.getByRole('heading', { name: '我的收藏' })).toBeVisible()
+    await expect(window.getByText('来自：猫猫加班（源素材已删除）')).toBeVisible()
+    await expect(window.getByTestId('emoji-card')).toHaveCount(1)
     await expect(access(sourcePath)).resolves.toBeUndefined()
   } finally {
     await electronApp.close()

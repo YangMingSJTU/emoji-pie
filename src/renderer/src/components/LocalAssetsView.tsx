@@ -23,6 +23,7 @@ import type { ToastKind } from './Toast'
 
 interface LocalAssetsViewProps {
   onNotice: (message: string, kind?: ToastKind) => void
+  onAssetDeleted?: (assetId: string) => void
 }
 
 interface DraftValue {
@@ -49,7 +50,7 @@ function errorLabel(item: LocalImportItemDto): string {
   return item.error?.message ?? '图片处理失败'
 }
 
-export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.Element {
+export function LocalAssetsView({ onNotice, onAssetDeleted }: LocalAssetsViewProps): React.JSX.Element {
   const [assets, setAssets] = useState<LocalAssetDto[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -278,12 +279,13 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
         return
       }
       setAssets((current) => current.filter((asset) => asset.id !== deleting.id))
+      onAssetDeleted?.(deleting.id)
       setDeleting(null)
-      onNotice('已从本地素材库删除', 'info')
+      onNotice('已从本地素材库删除；既有历史与收藏已保留', 'info')
     } finally {
       setBusy(false)
     }
-  }, [deleting, onNotice])
+  }, [deleting, onAssetDeleted, onNotice])
 
   return (
     <div className="workspace-inner local-assets-view">
@@ -521,7 +523,8 @@ export function LocalAssetsView({ onNotice }: LocalAssetsViewProps): React.JSX.E
         <div className="local-assets-modal-backdrop" role="presentation">
           <section className="local-assets-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-title">
             <h2 id="delete-title">从本地素材库删除“{deleting.displayName}”？</h2>
-            <p>将删除应用管理的素材副本、缩略图、名称与标签；不会删除原始导入文件、已导出图片、历史或收藏。</p>
+            <p>将删除应用管理的素材副本、缩略图、名称、标签与检索记录；它不会再用于新的生成或换一批。</p>
+            <p>不会删除原始导入文件、已导出图片、已有生成历史或收藏；旧记录会标记“源素材已删除”。</p>
             <div className="dialog-actions">
               <button type="button" onClick={() => setDeleting(null)}>取消</button>
               <button className="danger-button" type="button" disabled={busy} onClick={() => void confirmDelete()}>

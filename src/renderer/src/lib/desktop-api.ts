@@ -81,6 +81,7 @@ const browserLocalAssets: LocalAssetApi = {
   updateImportDraft: async () => unavailableLocalAssetResult(),
   finalizeImport: async () => unavailableLocalAssetResult(),
   updateMetadata: async () => unavailableLocalAssetResult(),
+  generatePosters: async () => unavailableLocalAssetResult(),
   delete: async () => unavailableLocalAssetResult()
 }
 

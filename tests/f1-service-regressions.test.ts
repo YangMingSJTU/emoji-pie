@@ -50,6 +50,7 @@ const workerResult: LocalAssetWorkerResult = {
 
 const immediateWorker: LocalAssetWorkerPool = {
   async process() { return workerResult },
+  async renderPoster() { throw new Error('poster worker is unused') },
   async dispose() {}
 }
 
@@ -190,6 +191,7 @@ describe('F1 service review regressions', () => {
         await release
         return workerResult
       },
+      async renderPoster() { throw new Error('poster worker is unused') },
       async dispose() {}
     }
     const databasePath = join(userData, 'emoji-pie.sqlite')

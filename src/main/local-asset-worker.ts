@@ -10,8 +10,20 @@ export interface LocalAssetWorkerResult {
   thumbnail: Buffer
 }
 
+export interface LocalPosterWorkerRequest {
+  filePath: string
+  caption: string
+  embedCaption: boolean
+  variant: number
+}
+
+export interface LocalPosterWorkerResult {
+  png: Buffer
+}
+
 export interface LocalAssetWorkerPool {
   process: (filePath: string) => Promise<LocalAssetWorkerResult>
+  renderPoster: (request: LocalPosterWorkerRequest) => Promise<LocalPosterWorkerResult>
   dispose: () => Promise<void>
 }
 
@@ -25,7 +37,8 @@ export class LocalAssetWorkerError extends Error {
 interface WorkerSuccessMessage {
   jobId: string
   ok: true
-  value: Omit<LocalAssetWorkerResult, 'thumbnail'> & { thumbnail: Uint8Array }
+  value?: Omit<LocalAssetWorkerResult, 'thumbnail'> & { thumbnail: Uint8Array }
+  poster?: Uint8Array
 }
 
 interface WorkerFailureMessage {
@@ -40,7 +53,11 @@ type WorkerMessage = WorkerSuccessMessage | WorkerFailureMessage
 interface QueuedJob {
   id: string
   filePath: string
-  resolve: (value: LocalAssetWorkerResult) => void
+  operation: 'inspect' | 'render-poster'
+  caption?: string
+  embedCaption?: boolean
+  variant?: number
+  resolve: (value: LocalAssetWorkerResult | LocalPosterWorkerResult) => void
   reject: (error: Error) => void
 }
 
@@ -72,8 +89,62 @@ const WORKER_SOURCE = String.raw`
     fail('unsupported_type', '只支持 PNG、JPEG 与静态 WebP')
   }
 
-  parentPort.on('message', async ({ jobId, filePath }) => {
+  function escapeXml(value) {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&apos;')
+  }
+
+  function captionOverlay(caption) {
+    const segments = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(caption)]
+      .map(({ segment }) => segment)
+    const fontSize = segments.length <= 20 ? 48 : segments.length <= 60 ? 38 : 30
+    const charsPerLine = fontSize === 48 ? 12 : fontSize === 38 ? 16 : 18
+    const lines = []
+    for (let index = 0; index < segments.length; index += charsPerLine) {
+      lines.push(segments.slice(index, index + charsPerLine).join(''))
+    }
+    const lineHeight = Math.ceil(fontSize * 1.3)
+    const bandHeight = Math.max(112, lines.length * lineHeight + 44)
+    const top = 640 - bandHeight
+    const tspans = lines.map((line, index) =>
+      '<tspan x="320" y="' + (top + 28 + fontSize + index * lineHeight) + '">' +
+        escapeXml(line) + '</tspan>'
+    ).join('')
+    return Buffer.from(
+      '<svg width="640" height="640" xmlns="http://www.w3.org/2000/svg">' +
+      '<rect x="0" y="' + top + '" width="640" height="' + bandHeight +
+        '" fill="#000" fill-opacity="0.72"/>' +
+      '<text text-anchor="middle" font-family="Microsoft YaHei, Noto Sans CJK SC, sans-serif" ' +
+        'font-size="' + fontSize + '" font-weight="700" fill="#fff">' + tspans +
+        '</text></svg>'
+    )
+  }
+
+  parentPort.on('message', async ({
+    jobId, filePath, operation = 'inspect', caption = '', embedCaption = false, variant = 0
+  }) => {
     try {
+      if (operation === 'render-poster') {
+        const positions = ['centre', 'north', 'south', 'east', 'west']
+        let pipeline = sharp(filePath, {
+          animated: false,
+          failOn: 'error',
+          limitInputPixels: MAX_PIXELS
+        }).rotate().resize(640, 640, {
+          fit: 'cover',
+          position: positions[Math.abs(variant) % positions.length]
+        })
+        if (embedCaption && caption) {
+          pipeline = pipeline.composite([{ input: captionOverlay(caption), top: 0, left: 0 }])
+        }
+        const poster = await pipeline.png({ compressionLevel: 9 }).toBuffer()
+        parentPort.postMessage({ jobId, ok: true, poster })
+        return
+      }
       const metadata = await sharp(filePath, {
         animated: true,
         failOn: 'error',
@@ -150,7 +221,29 @@ export class SharpLocalAssetWorkerPool implements LocalAssetWorkerPool {
       return Promise.reject(new LocalAssetWorkerError('processing_crashed', '图片处理池已关闭'))
     }
     return new Promise((resolve, reject) => {
-      this.queue.push({ id: randomUUID(), filePath, resolve, reject })
+      this.queue.push({
+        id: randomUUID(),
+        filePath,
+        operation: 'inspect',
+        resolve: (value) => resolve(value as LocalAssetWorkerResult),
+        reject
+      })
+      this.dispatch()
+    })
+  }
+
+  renderPoster(request: LocalPosterWorkerRequest): Promise<LocalPosterWorkerResult> {
+    if (this.disposed) {
+      return Promise.reject(new LocalAssetWorkerError('processing_crashed', '图片处理池已关闭'))
+    }
+    return new Promise((resolve, reject) => {
+      this.queue.push({
+        id: randomUUID(),
+        ...request,
+        operation: 'render-poster',
+        resolve: (value) => resolve(value as LocalPosterWorkerResult),
+        reject
+      })
       this.dispatch()
     })
   }
@@ -183,10 +276,15 @@ export class SharpLocalAssetWorkerPool implements LocalAssetWorkerPool {
       const job = slot.job
       if (!job || message.jobId !== job.id) return
       this.clearJob(slot)
-      if (message.ok) {
+      if (message.ok && job.operation === 'render-poster' && message.poster) {
+        job.resolve({ png: Buffer.from(message.poster) })
+      } else if (message.ok && job.operation === 'inspect' && message.value) {
         job.resolve({ ...message.value, thumbnail: Buffer.from(message.value.thumbnail) })
       } else {
-        job.reject(new LocalAssetWorkerError(message.code, message.message))
+        job.reject(new LocalAssetWorkerError(
+          message.ok ? 'processing_crashed' : message.code,
+          message.ok ? '图片处理进程返回了无效结果' : message.message
+        ))
       }
       this.dispatch()
     })
@@ -217,7 +315,14 @@ export class SharpLocalAssetWorkerPool implements LocalAssetWorkerPool {
         ))
         void this.replaceWorker(slot)
       }, this.timeoutMs)
-      slot.worker.postMessage({ jobId: job.id, filePath: job.filePath })
+      slot.worker.postMessage({
+        jobId: job.id,
+        filePath: job.filePath,
+        operation: job.operation,
+        caption: job.caption,
+        embedCaption: job.embedCaption,
+        variant: job.variant
+      })
     }
   }
 

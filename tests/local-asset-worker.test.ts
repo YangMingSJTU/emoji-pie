@@ -41,6 +41,38 @@ describe('SharpLocalAssetWorkerPool', () => {
     }
   })
 
+  it('renders a fixed 640px PNG locally with optional, XML-safe caption text', async () => {
+    const directory = await temporaryDirectory()
+    const imagePath = join(directory, 'poster-source.png')
+    await sharp({
+      create: { width: 800, height: 400, channels: 4, background: '#aa6633' }
+    }).png().toFile(imagePath)
+    const workers = new SharpLocalAssetWorkerPool()
+    try {
+      const plain = await workers.renderPoster({
+        filePath: imagePath,
+        caption: '',
+        embedCaption: false,
+        variant: 0
+      })
+      const captioned = await workers.renderPoster({
+        filePath: imagePath,
+        caption: '<加班 & 继续> ' + '组合🙂'.repeat(30),
+        embedCaption: true,
+        variant: 1
+      })
+      expect(await sharp(plain.png).metadata()).toMatchObject({
+        format: 'png', width: 640, height: 640
+      })
+      expect(await sharp(captioned.png).metadata()).toMatchObject({
+        format: 'png', width: 640, height: 640
+      })
+      expect(captioned.png.equals(plain.png)).toBe(false)
+    } finally {
+      await workers.dispose()
+    }
+  }, 10_000)
+
   it('fails closed on corrupt input and keeps the pool usable', async () => {
     const directory = await temporaryDirectory()
     const corruptPath = join(directory, 'corrupt.png')

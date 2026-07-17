@@ -47,6 +47,8 @@ export const LOCAL_ASSET_ERROR_CODES = [
   'import_failed',
   'recovery_failed',
   'delete_failed',
+  'generation_busy',
+  'generation_failed',
   'cancelled'
 ] as const
 
@@ -172,6 +174,30 @@ export interface DeleteLocalAssetRequest {
   assetId: string
 }
 
+export interface GenerateLocalPostersRequest {
+  prompt: string
+  caption: string
+  embedCaption: boolean
+  matchMode: LocalAssetMatchMode
+  selectedAssetIds: string[]
+  excludedAssetIds: string[]
+}
+
+export type LocalPosterShortageReason = 'library' | 'matching' | 'no_more'
+
+export interface LocalPosterCandidateDto {
+  assetId: string
+  assetNameSnapshot: string
+  matchedTags: string[]
+  dataUrl: string
+}
+
+export interface LocalPosterBatchDto {
+  candidates: LocalPosterCandidateDto[]
+  totalReadyAssets: number
+  shortageReason?: LocalPosterShortageReason
+}
+
 export interface LocalAssetApi {
   list: () => Promise<LocalAssetResult<LocalAssetDto[]>>
   beginImport: (
@@ -195,6 +221,9 @@ export interface LocalAssetApi {
   updateMetadata: (
     request: UpdateLocalAssetMetadataRequest
   ) => Promise<LocalAssetResult<LocalAssetDto>>
+  generatePosters: (
+    request: GenerateLocalPostersRequest
+  ) => Promise<LocalAssetResult<LocalPosterBatchDto>>
   delete: (request: DeleteLocalAssetRequest) => Promise<LocalAssetResult<void>>
 }
 

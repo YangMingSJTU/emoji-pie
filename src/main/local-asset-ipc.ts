@@ -3,12 +3,14 @@ import type {
   CancelLocalImportRequest,
   DeleteLocalAssetRequest,
   FinalizeLocalImportRequest,
+  GenerateLocalPostersRequest,
   GetLocalImportSessionRequest,
   LocalAssetDto,
   LocalAssetResult,
   LocalImportFinalizeResultDto,
   LocalImportItemDto,
   LocalImportSessionDto,
+  LocalPosterBatchDto,
   RetryLocalImportItemsRequest,
   UpdateLocalAssetMetadataRequest,
   UpdateLocalImportDraftRequest
@@ -24,6 +26,8 @@ export interface LocalAssetIpcRegistrar {
 
 export const LOCAL_ASSET_IPC_PAYLOAD_LIMITS = {
   maxItemIds: 500,
+  maxSelectedAssetIds: 9,
+  maxPromptCodeUnits: 512,
   maxNameCodeUnits: 256,
   maxTagCount: 24,
   maxTagCodeUnits: 128
@@ -53,6 +57,9 @@ export interface LocalAssetIpcService {
   updateMetadata: (
     request: UpdateLocalAssetMetadataRequest
   ) => Promise<LocalAssetResult<LocalAssetDto>>
+  generatePosters: (
+    request: GenerateLocalPostersRequest
+  ) => Promise<LocalAssetResult<LocalPosterBatchDto>>
   delete: (request: DeleteLocalAssetRequest) => Promise<LocalAssetResult<void>>
 }
 
@@ -126,6 +133,45 @@ function normalizeDraftRequest(value: unknown): UpdateLocalImportDraftRequest | 
   return { sessionId, itemId, displayName: value.displayName, tags: value.tags }
 }
 
+function normalizeAssetIds(value: unknown, maximum: number): string[] | undefined {
+  if (!Array.isArray(value) || value.length > maximum) return undefined
+  const assetIds = value.map((assetId) =>
+    typeof assetId === 'string' ? normalizeLocalAssetId(assetId) : undefined
+  )
+  if (assetIds.some((assetId) => assetId === undefined) ||
+    new Set(assetIds).size !== assetIds.length) return undefined
+  return assetIds as string[]
+}
+
+function normalizeGenerateRequest(value: unknown): GenerateLocalPostersRequest | undefined {
+  if (!isObject(value) ||
+    !isBoundedString(value.prompt, LOCAL_ASSET_IPC_PAYLOAD_LIMITS.maxPromptCodeUnits) ||
+    !isBoundedString(value.caption, LOCAL_ASSET_IPC_PAYLOAD_LIMITS.maxPromptCodeUnits) ||
+    typeof value.embedCaption !== 'boolean' ||
+    (value.matchMode !== 'automatic' && value.matchMode !== 'manual')) return undefined
+  const selectedAssetIds = normalizeAssetIds(
+    value.selectedAssetIds,
+    LOCAL_ASSET_IPC_PAYLOAD_LIMITS.maxSelectedAssetIds
+  )
+  const excludedAssetIds = normalizeAssetIds(
+    value.excludedAssetIds,
+    LOCAL_ASSET_IPC_PAYLOAD_LIMITS.maxItemIds
+  )
+  if (!selectedAssetIds || !excludedAssetIds || !value.prompt.trim() ||
+    (value.embedCaption && !value.caption.trim()) ||
+    (value.matchMode === 'automatic' && selectedAssetIds.length !== 0) ||
+    (value.matchMode === 'manual' &&
+      (selectedAssetIds.length < 1 || excludedAssetIds.length !== 0))) return undefined
+  return {
+    prompt: value.prompt.trim(),
+    caption: value.caption,
+    embedCaption: value.embedCaption,
+    matchMode: value.matchMode,
+    selectedAssetIds,
+    excludedAssetIds
+  }
+}
+
 function normalizeFinalizeRequest(value: unknown): FinalizeLocalImportRequest | undefined {
   const sessionId = readUuid(value, 'sessionId')
   if (!sessionId || !isObject(value) || !Array.isArray(value.itemIds)) return undefined
@@ -172,6 +218,10 @@ export function registerLocalAssetIpcHandlers(
     const request = normalizeUpdateRequest(value)
     return request ? service.updateMetadata(request) : invalidRequest()
   })
+  registrar.handle(LOCAL_ASSET_IPC_CHANNELS.generatePosters, (_event, value) => {
+    const request = normalizeGenerateRequest(value)
+    return request ? service.generatePosters(request) : invalidRequest()
+  })
   registrar.handle(LOCAL_ASSET_IPC_CHANNELS.delete, (_event, value) => {
     const assetId = readUuid(value, 'assetId')
     return assetId ? service.delete({ assetId }) : invalidRequest()
@@ -196,6 +246,7 @@ export function createUnavailableLocalAssetIpcService(): LocalAssetIpcService {
     updateImportDraft: unavailable,
     finalizeImport: unavailable,
     updateMetadata: unavailable,
+    generatePosters: unavailable,
     delete: unavailable
   }
 }

@@ -6,7 +6,8 @@ import type {
   LocalAssetTagDto,
   LocalImportFinalizeResultDto,
   LocalImportItemDto,
-  LocalImportSessionDto
+  LocalImportSessionDto,
+  LocalPosterBatchDto
 } from '../shared/local-assets'
 import {
   LOCAL_ASSET_IPC_CHANNELS,
@@ -93,6 +94,19 @@ function projectSession(session: LocalImportSessionDto): LocalImportSessionDto {
   }
 }
 
+function projectPosterBatch(batch: LocalPosterBatchDto): LocalPosterBatchDto {
+  return {
+    candidates: batch.candidates.map((candidate) => ({
+      assetId: candidate.assetId,
+      assetNameSnapshot: candidate.assetNameSnapshot,
+      matchedTags: [...candidate.matchedTags],
+      dataUrl: candidate.dataUrl
+    })),
+    totalReadyAssets: batch.totalReadyAssets,
+    ...(batch.shortageReason !== undefined ? { shortageReason: batch.shortageReason } : {})
+  }
+}
+
 function projectFinalizeResult(
   result: LocalImportFinalizeResultDto
 ): LocalImportFinalizeResultDto {
@@ -140,6 +154,10 @@ export function createLocalAssetApi(invoker: LocalAssetIpcInvoker): LocalAssetAp
     updateMetadata: async (request) => projectResult(
       await invokeLocalAsset(invoker, LOCAL_ASSET_IPC_CHANNELS.updateMetadata, request),
       projectAsset
+    ),
+    generatePosters: async (request) => projectResult(
+      await invokeLocalAsset(invoker, LOCAL_ASSET_IPC_CHANNELS.generatePosters, request),
+      projectPosterBatch
     ),
     delete: async (request) => projectResult(
       await invokeLocalAsset(invoker, LOCAL_ASSET_IPC_CHANNELS.delete, request),

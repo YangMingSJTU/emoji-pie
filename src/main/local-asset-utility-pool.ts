@@ -4,13 +4,16 @@ import type { LocalAssetErrorCode } from '../shared/local-assets'
 import {
   LocalAssetWorkerError,
   type LocalAssetWorkerPool,
-  type LocalAssetWorkerResult
+  type LocalAssetWorkerResult,
+  type LocalPosterWorkerRequest,
+  type LocalPosterWorkerResult
 } from './local-asset-worker'
 
 interface UtilityWorkerMessage {
   jobId: string
   ok: boolean
   value?: Omit<LocalAssetWorkerResult, 'thumbnail'> & { thumbnail: Uint8Array }
+  poster?: Uint8Array
   code?: LocalAssetErrorCode
   message?: string
 }
@@ -18,7 +21,11 @@ interface UtilityWorkerMessage {
 interface UtilityJob {
   id: string
   filePath: string
-  resolve: (value: LocalAssetWorkerResult) => void
+  operation: 'inspect' | 'render-poster'
+  caption?: string
+  embedCaption?: boolean
+  variant?: number
+  resolve: (value: LocalAssetWorkerResult | LocalPosterWorkerResult) => void
   reject: (error: Error) => void
 }
 
@@ -50,7 +57,29 @@ export class ElectronSharpUtilityProcessPool implements LocalAssetWorkerPool {
       return Promise.reject(new LocalAssetWorkerError('processing_crashed', '图片处理池已关闭'))
     }
     return new Promise((resolve, reject) => {
-      this.queue.push({ id: randomUUID(), filePath, resolve, reject })
+      this.queue.push({
+        id: randomUUID(),
+        filePath,
+        operation: 'inspect',
+        resolve: (value) => resolve(value as LocalAssetWorkerResult),
+        reject
+      })
+      this.dispatch()
+    })
+  }
+
+  renderPoster(request: LocalPosterWorkerRequest): Promise<LocalPosterWorkerResult> {
+    if (this.disposed) {
+      return Promise.reject(new LocalAssetWorkerError('processing_crashed', '图片处理池已关闭'))
+    }
+    return new Promise((resolve, reject) => {
+      this.queue.push({
+        id: randomUUID(),
+        ...request,
+        operation: 'render-poster',
+        resolve: (value) => resolve(value as LocalPosterWorkerResult),
+        reject
+      })
       this.dispatch()
     })
   }
@@ -85,7 +114,9 @@ export class ElectronSharpUtilityProcessPool implements LocalAssetWorkerPool {
       const job = slot.job
       if (!job || message.jobId !== job.id) return
       this.clearJob(slot)
-      if (message.ok && message.value) {
+      if (message.ok && job.operation === 'render-poster' && message.poster) {
+        job.resolve({ png: Buffer.from(message.poster) })
+      } else if (message.ok && job.operation === 'inspect' && message.value) {
         job.resolve({ ...message.value, thumbnail: Buffer.from(message.value.thumbnail) })
       } else {
         job.reject(new LocalAssetWorkerError(
@@ -125,7 +156,14 @@ export class ElectronSharpUtilityProcessPool implements LocalAssetWorkerPool {
         const index = this.slots.indexOf(slot)
         this.replaceSlot(slot, index, slot.child, slot.generation)
       }, this.timeoutMs)
-      slot.child.postMessage({ jobId: job.id, filePath: job.filePath })
+      slot.child.postMessage({
+        jobId: job.id,
+        filePath: job.filePath,
+        operation: job.operation,
+        caption: job.caption,
+        embedCaption: job.embedCaption,
+        variant: job.variant
+      })
     }
   }
 

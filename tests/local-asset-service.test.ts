@@ -32,6 +32,9 @@ const unusedWorkers: LocalAssetWorkerPool = {
   async process() {
     throw new Error('worker must not run during recovery')
   },
+  async renderPoster() {
+    throw new Error('poster worker must not run during recovery')
+  },
   async dispose() {}
 }
 

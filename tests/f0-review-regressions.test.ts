@@ -31,6 +31,7 @@ function createService(): LocalAssetIpcService {
     updateImportDraft: vi.fn(async () => failedResult()),
     finalizeImport: vi.fn(async () => failedResult()),
     updateMetadata: vi.fn(async () => failedResult()),
+    generatePosters: vi.fn(async () => failedResult()),
     delete: vi.fn(async () => failedResult())
   }
 }
