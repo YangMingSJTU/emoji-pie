@@ -324,6 +324,12 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
       BEGIN
         SELECT RAISE(ABORT, 'local asset supports at most 12 tags');
       END;
+      CREATE TRIGGER IF NOT EXISTS trg_local_asset_tags_owner_update
+      BEFORE UPDATE OF asset_id ON local_asset_tags
+      WHEN NEW.asset_id != OLD.asset_id
+      BEGIN
+        SELECT RAISE(ABORT, 'local asset tag owner is immutable');
+      END;
       CREATE TRIGGER IF NOT EXISTS trg_local_asset_tags_ready_delete
       BEFORE DELETE ON local_asset_tags
       WHEN (SELECT state FROM local_assets WHERE id = OLD.asset_id) = 'ready' AND
