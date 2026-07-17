@@ -1,4 +1,5 @@
 import { normalizeLocalAssetText, type LocalAssetDto } from '../shared/local-assets'
+import { inferLocalAssetQueryTags } from './local-asset-semantic-tags'
 
 export type LocalAssetMatchField = 'name' | 'tag'
 
@@ -63,6 +64,7 @@ export class LocalAssetIndex {
     const normalizedInput = normalizeLocalAssetText(input)
     if (!normalizedInput) return []
     const terms = queryTerms(normalizedInput)
+    const inferredTags = inferLocalAssetQueryTags(normalizedInput)
     const excludedIds = options.excludedIds ?? new Set<string>()
     const matches: LocalAssetMatch[] = []
 
@@ -74,11 +76,15 @@ export class LocalAssetIndex {
 
       for (const tag of indexed.normalizedTags) {
         const fullTagMatch = normalizedInput.includes(tag.normalizedValue)
+        const semanticTagMatch = inferredTags.has(tag.normalizedValue)
         const termMatch = terms.some((term) =>
           term.includes(tag.normalizedValue) || tag.normalizedValue.includes(term)
         )
         if (fullTagMatch) {
           score += 1_000
+          matchedTags.push(tag.displayValue)
+        } else if (semanticTagMatch) {
+          score += 700
           matchedTags.push(tag.displayValue)
         } else if (termMatch) {
           score += 400

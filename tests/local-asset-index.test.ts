@@ -50,4 +50,22 @@ describe('LocalAssetIndex', () => {
     index.upsert(asset('04', '猫猫震惊', ['震惊'], '2026-07-17T00:00:00.000Z'))
     expect(index.match('周末出去露营')).toEqual([])
   })
+
+  it('maps common chat intent and slang to user-authored tags offline', () => {
+    const index = new LocalAssetIndex()
+    const broken = asset('05', '情绪素材', ['崩溃', '破裂'], '2026-07-17T00:00:00.000Z')
+    const admired = asset('06', '夸奖素材', ['赞叹', '最佳'], '2026-07-17T01:00:00.000Z')
+    index.replace([broken, admired])
+
+    expect(index.match('我裂开了')[0]).toMatchObject({
+      asset: { id: broken.id },
+      matchedFields: ['tag'],
+      matchedTags: ['崩溃', '破裂']
+    })
+    expect(index.match('YYDS')[0]).toMatchObject({
+      asset: { id: admired.id },
+      matchedFields: ['tag'],
+      matchedTags: ['赞叹', '最佳']
+    })
+  })
 })
