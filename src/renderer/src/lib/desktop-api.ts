@@ -10,6 +10,7 @@ import {
   type EmojiRecord,
   type LibraryFilter
 } from '../../../shared/types'
+import type { LocalAssetApi, LocalAssetResult } from '../../../shared/local-assets'
 
 const STORAGE_KEY = 'emoji-pie-browser-library-v1'
 const SETTINGS_STORAGE_KEY = 'emoji-pie-browser-agent-runtime-v2'
@@ -58,6 +59,30 @@ function writeLibrary(records: EmojiRecord[]): void {
   } catch {
     localStorage.removeItem(STORAGE_KEY)
   }
+}
+
+function unavailableLocalAssetResult<T>(): LocalAssetResult<T> {
+  return {
+    ok: false,
+    error: {
+      code: 'feature_unavailable',
+      message: '浏览器预览不支持本地素材，请使用桌面版',
+      retryable: false
+    }
+  }
+}
+
+const browserLocalAssets: LocalAssetApi = {
+  list: async () => unavailableLocalAssetResult(),
+  beginImport: async () => unavailableLocalAssetResult(),
+  getImportSession: async () => unavailableLocalAssetResult(),
+  retryImportItems: async () => unavailableLocalAssetResult(),
+  cancelImport: async () => unavailableLocalAssetResult(),
+  updateImportDraft: async () => unavailableLocalAssetResult(),
+  finalizeImport: async () => unavailableLocalAssetResult(),
+  updateMetadata: async () => unavailableLocalAssetResult(),
+  generatePosters: async () => unavailableLocalAssetResult(),
+  delete: async () => unavailableLocalAssetResult()
 }
 
 function readAgentRuntimeSettings(): AgentRuntimeSettings {
@@ -182,7 +207,8 @@ const browserApi: DesktopApi = {
     async generate() {
       throw new Error('浏览器预览无法执行本机 AI 运行时')
     }
-  }
+  },
+  localAssets: browserLocalAssets
 }
 
 export const desktopApi: DesktopApi = window.emojiPie ?? browserApi

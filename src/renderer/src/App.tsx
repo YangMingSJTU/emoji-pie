@@ -10,6 +10,7 @@ import {
   WandSparkles
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { LocalAssetDto, LocalAssetMatchMode, LocalPosterBatchDto } from '../../shared/local-assets'
 import {
   DEFAULT_AGENT_RUNTIME_SETTINGS,
   DEFAULT_EMOJI_RENDER_SETTINGS,
@@ -27,6 +28,8 @@ import { EmojiGrid } from './components/EmojiGrid'
 import { InlineEmojiTray } from './components/InlineEmojiTray'
 import { AgentRuntimeView } from './components/AgentRuntimeView'
 import { Brand, Sidebar, type PageId } from './components/Sidebar'
+import { LocalAssetsView } from './components/LocalAssetsView'
+import { LocalPosterControls, type PosterBackgroundSource } from './components/LocalPosterControls'
 import { Toast, type ToastKind, type ToastState } from './components/Toast'
 import { PROMPT_SUGGESTIONS, SCENE_LABELS } from './config'
 import { desktopApi } from './lib/desktop-api'
@@ -50,11 +53,18 @@ const DEMOS: Array<{ prompt: string; mode: GenerationMode; style: EmojiStyle }> 
 
 const IMAGE_RESULT_COUNT = 9
 
+interface LocalGenerationSnapshot {
+  matchMode: LocalAssetMatchMode
+  selectedAssetIds: string[]
+  shownAssetIds: string[]
+}
+
 interface GenerationSnapshot {
   prompt: string
   mode: GenerationMode
   style: EmojiStyleSelection
   renderSettings: EmojiRenderSettings
+  local?: LocalGenerationSnapshot
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -80,6 +90,19 @@ function specsToRecords(
     favorite: false,
     createdAt
   }))
+}
+
+function localPosterHint(batch: LocalPosterBatchDto): string | null {
+  if (batch.shortageReason === 'no_more') {
+    return '没有更多匹配素材；当前结果已保留，可调整输入、补标签、手动选图或继续导入。'
+  }
+  if (batch.shortageReason === 'library') {
+    return `本地图库只有 ${batch.totalReadyAssets} 张可用素材，已展示实际数量；不会重复或联网补齐。`
+  }
+  if (batch.shortageReason === 'matching') {
+    return `只找到 ${batch.candidates.length} 张与本次输入匹配的素材；不会用无关图片凑数。`
+  }
+  return null
 }
 
 function makeDemos(renderSettings: EmojiRenderSettings): EmojiRecord[] {
@@ -116,6 +139,13 @@ export default function App(): React.JSX.Element {
   const [renderSettings, setRenderSettings] = useState<EmojiRenderSettings>(
     DEFAULT_EMOJI_RENDER_SETTINGS
   )
+  const [posterSource, setPosterSource] = useState<PosterBackgroundSource>('original')
+  const [localMatchMode, setLocalMatchMode] = useState<LocalAssetMatchMode>('automatic')
+  const [localAssets, setLocalAssets] = useState<LocalAssetDto[]>([])
+  const [selectedLocalAssetIds, setSelectedLocalAssetIds] = useState<string[]>([])
+  const [localAssetsLoading, setLocalAssetsLoading] = useState(false)
+  const [localAssetsError, setLocalAssetsError] = useState<string | null>(null)
+  const [generationHint, setGenerationHint] = useState<string | null>(null)
   const [analysisSource, setAnalysisSource] = useState('本地规则')
   const [toast, setToast] = useState<ToastState | null>(null)
   const mainRef = useRef<HTMLElement>(null)
@@ -144,6 +174,7 @@ export default function App(): React.JSX.Element {
         setActivePrompt('')
         setToast(null)
         activeBatchRef.current = null
+        setGenerationHint(null)
         mainRef.current?.scrollTo({ top: 0 })
       }
       setRenderSettings(settings)
@@ -178,6 +209,37 @@ export default function App(): React.JSX.Element {
     }
   }, [showToast])
 
+  const loadLocalAssets = useCallback(async (): Promise<void> => {
+    setLocalAssetsLoading(true)
+    setLocalAssetsError(null)
+    try {
+      const result = await desktopApi.localAssets.list()
+      if (!result.ok) {
+        setLocalAssetsError(result.error.message)
+        return
+      }
+      setLocalAssets(result.value)
+      setSelectedLocalAssetIds((current) => current.filter((assetId) =>
+        result.value.some((asset) => asset.id === assetId)
+      ))
+    } catch {
+      setLocalAssetsError('暂时无法读取本地素材库')
+    } finally {
+      setLocalAssetsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (
+      page === 'create' &&
+      posterSource === 'local' &&
+      renderSettings.outputType === 'image' &&
+      renderSettings.layout === 'poster'
+    ) {
+      void loadLocalAssets()
+    }
+  }, [loadLocalAssets, page, posterSource, renderSettings.layout, renderSettings.outputType])
+
   const demos = useMemo(() => makeDemos(renderSettings), [renderSettings])
   const inlineDemos = useMemo(() => {
     const demoPrompt = '今天状态不错'
@@ -203,13 +265,29 @@ export default function App(): React.JSX.Element {
     return () => window.cancelAnimationFrame(frame)
   }, [inlineEmojis, results])
 
+  const localPosterEnabled =
+    renderSettings.outputType === 'image' &&
+    renderSettings.layout === 'poster' &&
+    posterSource === 'local'
+
   const generate = useCallback(
     async (snapshot?: GenerationSnapshot, refresh = false): Promise<void> => {
-      const request = snapshot ?? {
+      const request: GenerationSnapshot = snapshot ?? {
         prompt,
         mode,
         style,
-        renderSettings: { ...renderSettings }
+        renderSettings: { ...renderSettings },
+        ...(localPosterEnabled
+          ? {
+              local: {
+                matchMode: localMatchMode,
+                selectedAssetIds: localMatchMode === 'manual'
+                  ? [...selectedLocalAssetIds]
+                  : [],
+                shownAssetIds: []
+              }
+            }
+          : {})
       }
       const normalizedPrompt = request.prompt.trim()
       if (!normalizedPrompt) {
@@ -221,6 +299,111 @@ export default function App(): React.JSX.Element {
       busyRef.current = true
       setGenerating(true)
       try {
+        if (
+          request.local &&
+          request.renderSettings.outputType === 'image' &&
+          request.renderSettings.layout === 'poster'
+        ) {
+          const nextAnalysis = analyzeText(normalizedPrompt, request.mode)
+          const generationNonce = Date.now()
+          const captionSpec = createGenerationSpecs(
+            normalizedPrompt,
+            request.mode,
+            request.style,
+            1,
+            0,
+            generationNonce,
+            { analysis: nextAnalysis }
+          )[0]
+          const selectedAssetIds = request.local.matchMode === 'manual'
+            ? [...request.local.selectedAssetIds]
+            : []
+          const generated = await desktopApi.localAssets.generatePosters({
+            prompt: normalizedPrompt,
+            caption: captionSpec.caption,
+            embedCaption: request.renderSettings.embedCaption,
+            matchMode: request.local.matchMode,
+            selectedAssetIds,
+            excludedAssetIds: request.local.matchMode === 'automatic'
+              ? [...request.local.shownAssetIds]
+              : []
+          })
+          if (!generated.ok) throw new Error(generated.error.message)
+          const hint = localPosterHint(generated.value)
+          const candidates = generated.value.candidates
+          const nextShownAssetIds = [
+            ...new Set([
+              ...request.local.shownAssetIds,
+              ...candidates.map((candidate) => candidate.assetId)
+            ])
+          ]
+          const nextSnapshot: GenerationSnapshot = {
+            prompt: normalizedPrompt,
+            mode: request.mode,
+            style: request.style,
+            renderSettings: { ...request.renderSettings },
+            local: {
+              matchMode: request.local.matchMode,
+              selectedAssetIds,
+              shownAssetIds: nextShownAssetIds
+            }
+          }
+
+          setAnalysis(nextAnalysis)
+          setAnalysisSource('本地素材 · 本地规则')
+          setActivePrompt(normalizedPrompt)
+          setGenerationHint(hint)
+          activeBatchRef.current = nextSnapshot
+          if (candidates.length === 0) {
+            if (!refresh) {
+              setResults([])
+              setInlineEmojis([])
+            }
+            showToast(hint ?? '没有找到可用的本地素材', 'info')
+            return
+          }
+
+          const specs = createGenerationSpecs(
+            normalizedPrompt,
+            request.mode,
+            request.style,
+            candidates.length,
+            0,
+            generationNonce,
+            { analysis: nextAnalysis }
+          )
+          const createdAt = new Date().toISOString()
+          const records: EmojiRecord[] = candidates.map((candidate, index) => ({
+            ...specs[index],
+            caption: captionSpec.caption,
+            layout: 'poster',
+            embedCaption: request.renderSettings.embedCaption,
+            dataUrl: candidate.dataUrl,
+            favorite: false,
+            createdAt,
+            localSource: {
+              assetId: candidate.assetId,
+              assetNameSnapshot: candidate.assetNameSnapshot,
+              matchMode: request.local!.matchMode,
+              sourceDeleted: false
+            }
+          }))
+          await desktopApi.library.save(records)
+          revealResultsRef.current = true
+          setInlineEmojis([])
+          setResults(records)
+          setLibrary((current) => {
+            const ids = new Set(records.map((record) => record.id))
+            return [...records, ...current.filter((record) => !ids.has(record.id))].slice(0, 240)
+          })
+          showToast(
+            refresh ? `已换一批，共 ${records.length} 张本地海报` : `已生成 ${records.length} 张本地海报`,
+            'success'
+          )
+          return
+        }
+
+        setGenerationHint(null)
         let overrides: GenerationOverrides | undefined
         let source = '本地规则'
         let usedFallback = false
@@ -304,7 +487,12 @@ export default function App(): React.JSX.Element {
         )
       } catch (error) {
         console.error(error)
-        showToast(refresh ? '换一批失败，已保留当前候选' : '生成失败，请再试一次', 'error')
+        showToast(
+          error instanceof Error
+            ? error.message
+            : refresh ? '换一批失败，已保留当前候选' : '生成失败，请再试一次',
+          'error'
+        )
       } finally {
         busyRef.current = false
         setGenerating(false)
@@ -312,9 +500,12 @@ export default function App(): React.JSX.Element {
     },
     [
       agentRuntimeSettings,
+      localMatchMode,
+      localPosterEnabled,
       mode,
       prompt,
       renderSettings,
+      selectedLocalAssetIds,
       showToast,
       style
     ]
@@ -392,9 +583,22 @@ export default function App(): React.JSX.Element {
   )
 
   const handleReuse = useCallback((record: EmojiRecord) => {
+    if (record.localSource?.sourceDeleted) {
+      showToast('源素材已删除，历史图片仍可使用，但不能基于它重新生成', 'info')
+      return
+    }
     setPrompt(record.prompt)
     setMode(record.mode)
     setStyle(record.style)
+    if (record.localSource) {
+      setPosterSource('local')
+      setLocalMatchMode(record.localSource.matchMode)
+      setSelectedLocalAssetIds(
+        record.localSource.matchMode === 'manual' ? [record.localSource.assetId] : []
+      )
+    } else {
+      setPosterSource('original')
+    }
     updateRenderSettings({
       outputType: 'image',
       layout: record.layout,
@@ -402,7 +606,19 @@ export default function App(): React.JSX.Element {
     })
     setPage('create')
     window.setTimeout(() => mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 0)
-  }, [updateRenderSettings])
+  }, [showToast, updateRenderSettings])
+
+  const markLocalAssetDeleted = useCallback((assetId: string): void => {
+    setLocalAssets((current) => current.filter((asset) => asset.id !== assetId))
+    setSelectedLocalAssetIds((current) => current.filter((id) => id !== assetId))
+    const markDeleted = (records: EmojiRecord[]) => records.map((record) =>
+      record.localSource?.assetId === assetId
+        ? { ...record, localSource: { ...record.localSource, sourceDeleted: true } }
+        : record
+    )
+    setLibrary(markDeleted)
+    setResults(markDeleted)
+  }, [])
 
   const handleClearHistory = useCallback(async () => {
     try {
@@ -483,6 +699,45 @@ export default function App(): React.JSX.Element {
               style={style}
               renderSettings={renderSettings}
               generating={generating}
+              generateDisabled={localPosterEnabled && (
+                localAssetsLoading ||
+                localAssetsError !== null ||
+                localAssets.length === 0 ||
+                (localMatchMode === 'manual' && selectedLocalAssetIds.length === 0)
+              )}
+              generateLabelOverride={localPosterEnabled ? '用本地素材生成' : undefined}
+              localPosterControls={(
+                <LocalPosterControls
+                  source={posterSource}
+                  matchMode={localMatchMode}
+                  assets={localAssets}
+                  selectedAssetIds={selectedLocalAssetIds}
+                  loading={localAssetsLoading}
+                  error={localAssetsError}
+                  onSourceChange={(nextSource) => {
+                    if (nextSource === posterSource) return
+                    setPosterSource(nextSource)
+                    setResults([])
+                    setInlineEmojis([])
+                    setGenerationHint(null)
+                    activeBatchRef.current = null
+                  }}
+                  onMatchModeChange={(nextMode) => {
+                    if (nextMode === localMatchMode) return
+                    setLocalMatchMode(nextMode)
+                    if (nextMode === 'automatic') setSelectedLocalAssetIds([])
+                    setResults([])
+                    setGenerationHint(null)
+                    activeBatchRef.current = null
+                  }}
+                  onSelectedAssetIdsChange={setSelectedLocalAssetIds}
+                  onOpenLibrary={() => {
+                    setPage('local-assets')
+                    window.setTimeout(() => mainRef.current?.scrollTo({ top: 0 }), 0)
+                  }}
+                  onRetry={() => void loadLocalAssets()}
+                />
+              )}
               onPromptChange={setPrompt}
               onModeChange={setMode}
               onStyleChange={setStyle}
@@ -490,6 +745,10 @@ export default function App(): React.JSX.Element {
               onGenerate={() => void generate()}
               onRandomPrompt={randomPrompt}
             />
+
+            {generationHint && (
+              <div className="local-generation-hint" role="status">{generationHint}</div>
+            )}
 
             {hasGenerationResults ? (
               <section ref={resultRef} className="result-section" aria-label="生成结果">
@@ -513,18 +772,29 @@ export default function App(): React.JSX.Element {
                         ? `${inlineEmojis.length} 个行内 Emoji`
                         : `${results.length} 张${results[0]?.layout === 'poster' ? '海报' : '贴纸'}`}
                     </small>
-                    <button
-                      type="button"
-                      className="refresh-results-button"
-                      onClick={() => {
-                        const snapshot = activeBatchRef.current
-                        if (snapshot) void generate(snapshot, true)
-                      }}
-                      disabled={generating}
-                    >
-                      <RefreshCw className={generating ? 'spin' : ''} size={15} />
-                      {generating ? '生成中' : '换一批'}
-                    </button>
+                    {activeBatchRef.current?.local?.matchMode === 'manual' ? (
+                      <button
+                        type="button"
+                        className="refresh-results-button"
+                        onClick={() => document.getElementById('local-poster-picker-button')?.click()}
+                      >
+                        <ImageIcon size={15} />
+                        重新选图
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="refresh-results-button"
+                        onClick={() => {
+                          const snapshot = activeBatchRef.current
+                          if (snapshot) void generate(snapshot, true)
+                        }}
+                        disabled={generating}
+                      >
+                        <RefreshCw className={generating ? 'spin' : ''} size={15} />
+                        {generating ? '生成中' : '换一批'}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {inlineEmojis.length > 0 ? (
@@ -573,6 +843,8 @@ export default function App(): React.JSX.Element {
               </section>
             )}
           </div>
+        ) : page === 'local-assets' ? (
+          <LocalAssetsView onNotice={showToast} onAssetDeleted={markLocalAssetDeleted} />
         ) : page === 'runtime' ? (
           <AgentRuntimeView
             settings={agentRuntimeSettings}

@@ -8,6 +8,7 @@ import {
   Sparkles,
   Type
 } from 'lucide-react'
+import type { ReactNode } from 'react'
 import type {
   EmojiRenderSettings,
   EmojiStyleSelection,
@@ -22,6 +23,9 @@ interface ComposerProps {
   style: EmojiStyleSelection
   renderSettings: EmojiRenderSettings
   generating: boolean
+  generateDisabled?: boolean
+  generateLabelOverride?: string
+  localPosterControls?: ReactNode
   onPromptChange: (value: string) => void
   onModeChange: (mode: GenerationMode) => void
   onStyleChange: (style: EmojiStyleSelection) => void
@@ -36,6 +40,9 @@ export function Composer({
   style,
   renderSettings,
   generating,
+  generateDisabled = false,
+  generateLabelOverride,
+  localPosterControls,
   onPromptChange,
   onModeChange,
   onStyleChange,
@@ -176,6 +183,8 @@ export function Composer({
         )}
       </div>
 
+      {!inlineOutput && renderSettings.layout === 'poster' && localPosterControls}
+
       <div className={`composer-footer ${inlineOutput ? 'is-inline-output' : ''}`}>
         {inlineOutput ? (
           <div className="inline-output-preview" aria-label="行内 Emoji 输出预览">
@@ -206,14 +215,14 @@ export function Composer({
           type="button"
           className="generate-button"
           onClick={onGenerate}
-          disabled={generating}
+          disabled={generating || generateDisabled}
         >
           {generating ? (
             <LoaderCircle className="spin" size={19} />
           ) : (
             <Sparkles size={19} />
           )}
-          {generating ? '正在创作' : generateLabel}
+          {generating ? '正在创作' : generateLabelOverride ?? generateLabel}
         </button>
       </div>
     </section>

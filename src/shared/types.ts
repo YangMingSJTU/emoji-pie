@@ -1,3 +1,5 @@
+import type { LocalAssetApi } from './local-assets'
+
 export type GenerationMode = 'express' | 'reply'
 
 export const EMOJI_STYLES = [
@@ -58,6 +60,13 @@ export type EmotionId =
 
 export type LibraryFilter = 'all' | 'favorites'
 
+export interface LocalGenerationSourceSnapshot {
+  assetId: string
+  assetNameSnapshot: string
+  matchMode: 'automatic' | 'manual'
+  sourceDeleted: boolean
+}
+
 export interface TextAnalysis {
   emotion: EmotionId
   emotionLabel: string
@@ -80,6 +89,7 @@ export interface EmojiRecord {
   dataUrl: string
   favorite: boolean
   createdAt: string
+  localSource?: LocalGenerationSourceSnapshot
 }
 
 export interface AppInfo {
@@ -200,4 +210,5 @@ export interface DesktopApi {
     start: (settings: AgentRuntimeSettings) => Promise<AgentRuntimeDescriptor>
     generate: (request: AgentRuntimeGenerateRequest) => Promise<AgentRuntimeGenerationResult>
   }
+  localAssets: LocalAssetApi
 }

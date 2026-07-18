@@ -86,6 +86,45 @@ describe('emoji render settings', () => {
     }
   })
 
+  it('persists a local source snapshot and reports a removed source without losing history', () => {
+    const repository = new EmojiRepository(':memory:')
+    const record: EmojiRecord = {
+      id: 'local-1',
+      prompt: '加班',
+      mode: 'express',
+      style: 'office',
+      layout: 'poster',
+      embedCaption: true,
+      emotion: 'tired',
+      caption: '加班',
+      seed: 7,
+      dataUrl: 'data:image/png;base64,AQ==',
+      favorite: true,
+      createdAt: '2026-07-17T00:00:00.000Z',
+      localSource: {
+        assetId: '123E4567-E89B-42D3-A456-426614174000',
+        assetNameSnapshot: '素材 A',
+        matchMode: 'automatic',
+        sourceDeleted: false
+      }
+    }
+    try {
+      repository.save([record])
+      expect(repository.list()[0]).toMatchObject({
+        id: 'local-1',
+        favorite: true,
+        localSource: {
+          assetId: '123e4567-e89b-42d3-a456-426614174000',
+          assetNameSnapshot: '素材 A',
+          matchMode: 'automatic',
+          sourceDeleted: true
+        }
+      })
+    } finally {
+      repository.close()
+    }
+  })
+
   it('migrates old records as poster images with embedded captions', () => {
     const directory = mkdtempSync(join(tmpdir(), 'emoji-pie-migration-'))
     const databasePath = join(directory, 'old.sqlite')

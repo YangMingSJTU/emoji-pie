@@ -47,7 +47,7 @@ export function EmojiCard({
       </button>
 
       <div className="card-actions">
-        {showReuse && onReuse && (
+        {showReuse && onReuse && !record.localSource?.sourceDeleted && (
           <button type="button" onClick={() => onReuse(record)} title="再次创作" aria-label="再次创作">
             <RefreshCw size={16} />
           </button>
@@ -77,6 +77,12 @@ export function EmojiCard({
         <footer className="emoji-card-footer">
           <span title={record.caption}>{record.caption}</span>
           <small>{emotionLabel(record.emotion)}</small>
+          {record.localSource && (
+            <small className={record.localSource.sourceDeleted ? 'local-source is-deleted' : 'local-source'}>
+              来自：{record.localSource.assetNameSnapshot}
+              {record.localSource.sourceDeleted ? '（源素材已删除）' : ''}
+            </small>
+          )}
         </footer>
       )}
     </article>
