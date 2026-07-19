@@ -1,1 +1,4 @@
 tests/fixtures/ym-10-corpus-v1.json text eol=lf
+assets/starter-pack-v1/manifest.yaml text eol=lf
+assets/starter-pack-v1/prompts.yaml text eol=lf
+assets/starter-pack-v1/runtime-ids.json text eol=lf
