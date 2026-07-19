@@ -11,6 +11,7 @@ import {
   type LibraryFilter
 } from '../../../shared/types'
 import type { LocalAssetApi, LocalAssetResult } from '../../../shared/local-assets'
+import { writeTextWithFallback, type TextClipboardWriter } from './clipboard'
 
 const STORAGE_KEY = 'emoji-pie-browser-library-v1'
 const SETTINGS_STORAGE_KEY = 'emoji-pie-browser-agent-runtime-v2'
@@ -107,6 +108,53 @@ function readAgentRuntimeSettings(): AgentRuntimeSettings {
   }
 }
 
+function getBrowserClipboardWriter(): TextClipboardWriter | undefined {
+  if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+    return undefined
+  }
+  const clipboard = navigator.clipboard
+  return (value) => clipboard.writeText(value)
+}
+
+async function writeTextWithSelection(value: string): Promise<void> {
+  if (
+    typeof document === 'undefined' ||
+    !document.body ||
+    typeof document.execCommand !== 'function'
+  ) {
+    throw new Error('当前环境不支持文本剪贴板')
+  }
+
+  const activeElement = document.activeElement
+  const field = document.createElement('textarea')
+  field.value = value
+  field.readOnly = true
+  field.setAttribute('aria-hidden', 'true')
+  Object.assign(field.style, {
+    position: 'fixed',
+    top: '0',
+    left: '-9999px',
+    width: '1px',
+    height: '1px',
+    opacity: '0'
+  })
+  document.body.append(field)
+  field.focus({ preventScroll: true })
+  field.select()
+  field.setSelectionRange(0, value.length)
+
+  try {
+    if (!document.execCommand('copy')) throw new Error('浏览器拒绝文本复制')
+  } finally {
+    field.remove()
+    if (activeElement instanceof HTMLElement) activeElement.focus({ preventScroll: true })
+  }
+}
+
+function writeBrowserClipboardText(value: string): Promise<void> {
+  return writeTextWithFallback(value, getBrowserClipboardWriter(), writeTextWithSelection)
+}
+
 const browserApi: DesktopApi = {
   library: {
     async list(filter: LibraryFilter = 'all') {
@@ -141,8 +189,7 @@ const browserApi: DesktopApi = {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
     },
     async writeText(value) {
-      if (!navigator.clipboard) throw new Error('浏览器不支持文本剪贴板')
-      await navigator.clipboard.writeText(value)
+      await writeBrowserClipboardText(value)
     }
   },
   dialog: {
@@ -211,4 +258,19 @@ const browserApi: DesktopApi = {
   localAssets: browserLocalAssets
 }
 
-export const desktopApi: DesktopApi = window.emojiPie ?? browserApi
+function createDesktopApi(): DesktopApi {
+  const nativeApi = window.emojiPie
+  if (!nativeApi) return browserApi
+
+  const nativeClipboard = nativeApi.clipboard as Partial<DesktopApi['clipboard']> | undefined
+  return {
+    ...nativeApi,
+    clipboard: {
+      writeImage: nativeClipboard?.writeImage ?? browserApi.clipboard.writeImage,
+      writeText: (value) =>
+        writeTextWithFallback(value, nativeClipboard?.writeText, browserApi.clipboard.writeText)
+    }
+  }
+}
+
+export const desktopApi: DesktopApi = createDesktopApi()

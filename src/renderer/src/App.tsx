@@ -549,7 +549,8 @@ export default function App(): React.JSX.Element {
       try {
         await desktopApi.clipboard.writeText(suggestion.value)
         showToast(`${suggestion.value} 已复制为行内 Emoji`)
-      } catch {
+      } catch (error) {
+        console.error('Inline Emoji clipboard write failed.', error)
         showToast('行内 Emoji 复制失败', 'error')
       }
     },
