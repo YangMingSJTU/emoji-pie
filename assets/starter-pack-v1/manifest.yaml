@@ -1,0 +1,83 @@
+schema_version: 1
+pack_id: starter-pack-v1
+pack_version: 1.0.0
+title: Starter Pack v1
+created_at: 2026-07-19
+asset_count: 36
+categories: 12
+assets_per_category: 3
+
+rights_record:
+  applies_to: all 36 assets listed below
+  source_type: team_original
+  creation_method: AI-assisted generation from EmojiPie design-team-authored prompts
+  generation_provider: OpenAI built-in image generation
+  input_reference_images: []
+  third_party_source_assets: false
+  third_party_templates: false
+  known_brands_requested: []
+  known_people_requested: []
+  known_copyrighted_characters_requested: []
+  original_subject: Tuantuan, an EmojiPie project mascot defined in the prompt record
+  rights_holder: EmojiPie project owner, as the submitting customer, to the extent permitted by applicable law and governing platform terms
+  rights_basis: As between the customer and OpenAI, the customer owns Output to the extent permitted by applicable law; OpenAI assigns any right, title, and interest it may have in Output
+  rights_basis_url: https://openai.com/policies/terms-of-use/
+  project_license: EmojiPie project proprietary asset; redistribution is permitted only with the EmojiPie application or with project-owner authorization
+  allowed_project_uses:
+    - bundle with the EmojiPie application
+    - display, crop, resize, optimize, and recolor in the application
+    - use as source material for user-requested meme and poster generation
+    - distribute generated application output under the product terms
+  exclusions:
+    - no trademark clearance is represented
+    - no warranty of output uniqueness is represented
+  provenance_record: prompts.yaml
+
+validation:
+  final_file_count: 36
+  rights_rows: 36
+  rights_coverage: 36/36
+  file_format: image/png
+  width_px: 1254
+  height_px: 1254
+  hash_algorithm: sha256
+  automated_checks: file count, dimensions, PNG decode, byte size, SHA-256 uniqueness, manifest coverage
+  visual_review: contact-sheet review for obvious text, watermark, logo, known character, broken anatomy, and category readability
+
+assets:
+  - { id: SPV1-001, file: spv1-001-celebration-confetti.png, name: 欢呼彩带, category: happiness_celebration, tags: [开心, 庆祝, 欢呼, 成功, 好耶], bytes: 1418618, sha256: aaab70581584e002d20675cc5752bd39c06398c6ffdcbbf7c38e81dd7ff98469, rights: rights_record }
+  - { id: SPV1-002, file: spv1-002-celebration-trophy.png, name: 举杯获胜, category: happiness_celebration, tags: [开心, 庆祝, 成功, 通过, 奖杯], bytes: 1673938, sha256: 7a1d26aeca7ee04392ce7acd9a1a906b107fc2d46f300a98af8aff0316d894ef, rights: rights_record }
+  - { id: SPV1-003, file: spv1-003-celebration-dance.png, name: 胜利舞步, category: happiness_celebration, tags: [开心, 庆祝, 舞蹈, 周五, 下班], bytes: 1837307, sha256: 18b5b5fe6fb755de2de03bf5026abcb49148145a4fedc3b4412b081a5855b680, rights: rights_record }
+  - { id: SPV1-004, file: spv1-004-sadness-rain.png, name: 独自淋雨, category: sadness, tags: [难过, 下雨, 独处, 低落, 居家], bytes: 1707031, sha256: b9bf8fb3862931859da8d55ceac66d12fb8980b39825fabcb068006426b82eac, rights: rights_record }
+  - { id: SPV1-005, file: spv1-005-sadness-tissues.png, name: 抱着纸巾, category: sadness, tags: [难过, 哭泣, 委屈, 破防, 安慰], bytes: 1630568, sha256: 00322d5338c899ebb5b253a7bda7bc706ab9c7b5c92288a401cc495423cad6a7, rights: rights_record }
+  - { id: SPV1-006, file: spv1-006-sadness-wilted-flower.png, name: 花也蔫了, category: sadness, tags: [难过, 失落, 沮丧, 失败, 低落], bytes: 1651053, sha256: 9b013898e330c57e8d5ba940f7da02346b2d127ffa403683bc0908f08815e6f2, rights: rights_record }
+  - { id: SPV1-007, file: spv1-007-anger-steam.png, name: 气到冒烟, category: anger, tags: [生气, 愤怒, 烦躁, 不满, 冒火], bytes: 1709753, sha256: 6b9ffb0c97de3dffd6a7c1a886ac7d05719fb9cfb0535c18fc560482660897e7, rights: rights_record }
+  - { id: SPV1-008, file: spv1-008-anger-scribble.png, name: 怒气乱线, category: anger, tags: [生气, 愤怒, 抓狂, 烦躁, 崩溃], bytes: 1746891, sha256: d0b50726ee061c2b71fca02b1e2cda84d0704c61a1787385efab9517569b7c2e, rights: rights_record }
+  - { id: SPV1-009, file: spv1-009-anger-pillow.png, name: 捶软枕头, category: anger, tags: [生气, 发泄, 抓狂, 无奈, 压力], bytes: 1868097, sha256: 81fc8d42370342a26e377b52be7d536b9190042a04ef656c6c6f7e7fa8ad782d, rights: rights_record }
+  - { id: SPV1-010, file: spv1-010-confusion-maze.png, name: 迷路地图, category: confusion, tags: [困惑, 疑问, 迷茫, 路线, 不明白], bytes: 1513107, sha256: 5d3666168077484924012ec732a17ede150ca36334f3c9e00ab5fa403d69b1de, rights: rights_record }
+  - { id: SPV1-011, file: spv1-011-confusion-arrows.png, name: 箭头打结, category: confusion, tags: [困惑, 疑问, 迷茫, 选择, 纠结], bytes: 1737667, sha256: de1db788ecd3754305e18369d5e366244e5cff72a8df29bfd1708d7cf0be2564, rights: rights_record }
+  - { id: SPV1-012, file: spv1-012-confusion-signpost.png, name: 无字路牌, category: confusion, tags: [困惑, 方向, 选择, 疑问, 迷路], bytes: 1793280, sha256: 3fd30ef97adcf2b11d45789c960e7c19331572991cce5c1ac6b875c9a3261b22, rights: rights_record }
+  - { id: SPV1-013, file: spv1-013-shock-lightning.png, name: 当场震惊, category: shock, tags: [震惊, 惊讶, 突然, 闪电, 啊], bytes: 1538659, sha256: b148fe144823c34e27b9d4a936dc7b904028039f676b91606624a61d1b8c2e35, rights: rights_record }
+  - { id: SPV1-014, file: spv1-014-shock-dropped-mug.png, name: 杯子都掉了, category: shock, tags: [震惊, 惊讶, 意外, 掉落, 咖啡], bytes: 1817674, sha256: 9d6cf705f6ff27c0cf6eb96d18ce7d7fa78a74953c45d08cd1520b7f4a3b24f8, rights: rights_record }
+  - { id: SPV1-015, file: spv1-015-shock-surprise-box.png, name: 盒中惊喜, category: shock, tags: [震惊, 惊喜, 突然, 礼物, 意外], bytes: 1844334, sha256: 7b07908a3aa4916d4d58b4c8998925a5fa1084c5cd1ff7a9764ad2a019c92b08, rights: rights_record }
+  - { id: SPV1-016, file: spv1-016-speechless-zip-mouth.png, name: 无话可说, category: speechless, tags: [无语, 沉默, 闭嘴, 尴尬, 无奈], bytes: 1531368, sha256: 0a0c748b121d8cf35f9d3b325b047a8ad0bdb0e2bf2d6995685e3678563ab8c4, rights: rights_record }
+  - { id: SPV1-017, file: spv1-017-speechless-blank-stare.png, name: 呆住三秒, category: speechless, tags: [无语, 沉默, 呆住, 尴尬, 空白], bytes: 1744700, sha256: 30021df32b60f6d962f97a7e80108f24b7de532929385c3bc34356beaac9bf32, rights: rights_record }
+  - { id: SPV1-018, file: spv1-018-speechless-frozen.png, name: 原地冻住, category: speechless, tags: [无语, 僵住, 沉默, 尴尬, 冷场], bytes: 1796544, sha256: de26ef56a821e0aeaf2f79e5bf005b033ee8cbc1b565d004fa4f5b3af8663048, rights: rights_record }
+  - { id: SPV1-019, file: spv1-019-agree-nod.png, name: 认真点头, category: agreement, tags: [同意, 确认, 收到, 可以, 明白], bytes: 1764089, sha256: 651ab4fd60f6efb0187e0c06915e0d5bf80378167815a90012342cef8bf319a4, rights: rights_record }
+  - { id: SPV1-020, file: spv1-020-agree-check.png, name: 确认完成, category: agreement, tags: [同意, 确认, 完成, 没问题, 通过], bytes: 1649150, sha256: 3be77429db582a5490fce4d348804b684e70b6e99485389d3f3976cfb6475b0e, rights: rights_record }
+  - { id: SPV1-021, file: spv1-021-agree-handshake.png, name: 愉快握手, category: agreement, tags: [同意, 合作, 确认, 成交, 支持], bytes: 1776803, sha256: 303e550330a5a8603fa621fbabd954019426681f1fa02b82f9230c43e3559fdb, rights: rights_record }
+  - { id: SPV1-022, file: spv1-022-refuse-stop.png, name: 明确拒绝, category: refusal, tags: [拒绝, 不行, 停止, 不要, 防御], bytes: 1652151, sha256: 9d42d5864574f6be69de095fb4081f25a91903a2593b5db87725dd8d2f527eef, rights: rights_record }
+  - { id: SPV1-023, file: spv1-023-refuse-crossed-arms.png, name: 抱臂摇头, category: refusal, tags: [拒绝, 不赞同, 摇头, 不相信, 不接受], bytes: 1506301, sha256: 7cc61f132de2ec189f0e607f7ed4387d6dc51e7aa23f1d1c4e5e60637559d54c, rights: rights_record }
+  - { id: SPV1-024, file: spv1-024-refuse-shield.png, name: 挡住这口锅, category: refusal, tags: [拒绝, 防御, 拒绝背锅, 不接受, 保护], bytes: 1540632, sha256: 773c529a30d1866db2d2fca8e840844270ef32a4062a20c16d23ec4b40318cad, rights: rights_record }
+  - { id: SPV1-025, file: spv1-025-thanks-gift.png, name: 送上谢礼, category: gratitude, tags: [感谢, 谢谢, 礼物, 心意, 开心], bytes: 1674379, sha256: ff347d02171f5d2a7f12701a51b25a237e0e614a37ab6377486c976021fbb117, rights: rights_record }
+  - { id: SPV1-026, file: spv1-026-thanks-heart-hands.png, name: 比心感谢, category: gratitude, tags: [感谢, 谢谢, 比心, 感动, 喜欢], bytes: 1553850, sha256: 5cc7a4425c45f90b008023e5443c854fe4feb0707d6e359b0f1fba2789a19e28, rights: rights_record }
+  - { id: SPV1-027, file: spv1-027-thanks-bouquet.png, name: 递上花束, category: gratitude, tags: [感谢, 谢谢, 花束, 心意, 温暖], bytes: 1563646, sha256: 904712870a744c827e65288930b11b468fa85ae7b03ae734acdd98c669a8b119, rights: rights_record }
+  - { id: SPV1-028, file: spv1-028-apology-bow.png, name: 认真鞠躬, category: apology, tags: [道歉, 对不起, 抱歉, 认错, 诚恳], bytes: 1596010, sha256: b5c5084bbec3f7b77cca402c132904059cd61699732bbb8b412d984391540e43, rights: rights_record }
+  - { id: SPV1-029, file: spv1-029-apology-repaired-pot.png, name: 补好裂缝, category: apology, tags: [道歉, 修复, 弥补, 认错, 和好], bytes: 1832276, sha256: a14e8317b318571497976ba2270d922a18802c2ef621a34ea25d85920cbec73b, rights: rights_record }
+  - { id: SPV1-030, file: spv1-030-apology-letter.png, name: 双手递信, category: apology, tags: [道歉, 抱歉, 信件, 诚恳, 解释], bytes: 1637080, sha256: 4ca5fae674344dba2aeba2ed49c0f701a5368d6bcf0fb0920d3f58181cbfd8f2, rights: rights_record }
+  - { id: SPV1-031, file: spv1-031-wait-hourglass.png, name: 沙漏等待, category: waiting_urging, tags: [等待, 催促, 时间, 进度, 耐心], bytes: 1710114, sha256: c2f06f1ee0e15590e32e6b339090ee25bb5b541f83b9be8c13233f76e6d5cc11, rights: rights_record }
+  - { id: SPV1-032, file: spv1-032-wait-clock.png, name: 盯着时钟, category: waiting_urging, tags: [等待, 催促, 截止时间, 进度, 迟到], bytes: 1574636, sha256: 957c093b6e7e96651a135f3fc49c348ad0d4f45a8943f94f8a9810fb781a895b, rights: rights_record }
+  - { id: SPV1-033, file: spv1-033-wait-door.png, name: 门口等你, category: waiting_urging, tags: [等待, 到达, 楼下, 等回复, 探头], bytes: 1765794, sha256: dfbe47822a60f480b2c4c42bea93ecb1cdf9ad95ef7d9eff2ffc44fa4e8789ac, rights: rights_record }
+  - { id: SPV1-034, file: spv1-034-tired-desk.png, name: 趴在工位, category: tired_work, tags: [疲惫, 工作, 办公, 加班, 电脑], bytes: 1464609, sha256: 75236bc73a71ebddcd70b9dd6307d6d42a3abc93fd161e75c68f9468c7c174de, rights: rights_record }
+  - { id: SPV1-035, file: spv1-035-tired-coffee.png, name: 咖啡续命, category: tired_work, tags: [疲惫, 咖啡, 提神, 熬夜, 困倦], bytes: 1536391, sha256: da8f260dcbfcac996a6e417e92cbd23a177265e0455a91d8f4b7debcfaf0b2a4, rights: rights_record }
+  - { id: SPV1-036, file: spv1-036-tired-paperwork.png, name: 文件堆成山, category: tired_work, tags: [疲惫, 工作压力, 文件, 修改, 崩溃], bytes: 1654371, sha256: c73bbcc7e0a43d940ffd22221d3458b505d48fa8b4dd5b651002d53871506c45, rights: rights_record }

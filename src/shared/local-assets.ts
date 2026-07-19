@@ -84,6 +84,14 @@ export interface LocalAssetTagDto {
 /** Renderer-safe asset metadata. Managed file-system paths and hashes are intentionally absent. */
 export interface LocalAssetDto {
   id: string
+  source: AssetSource
+  packId?: string
+  packVersion?: string
+  packAssetKey?: string
+  disabledAt?: string
+  contentState: AssetContentState
+  canEdit: boolean
+  canDelete: boolean
   displayName: string
   originalFilename: string
   mimeType: LocalAssetMimeType
@@ -288,3 +296,4 @@ export function validateLocalAssetMetadata(
 
   return issues
 }
+import type { AssetContentState, AssetSource } from './starter-packs'

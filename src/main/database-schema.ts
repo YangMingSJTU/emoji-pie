@@ -1,6 +1,7 @@
+import { existsSync } from 'node:fs'
 import type { DatabaseSync } from 'node:sqlite'
 
-export const APPLICATION_SCHEMA_VERSION = 2
+export const APPLICATION_SCHEMA_VERSION = 3
 
 interface TableColumn {
   name: string
@@ -25,6 +26,22 @@ function addColumnIfMissing(
   columns.add(column)
 }
 
+function preservePreV3Backup(database: DatabaseSync, currentVersion: number): void {
+  if (currentVersion >= 3) return
+  const hasApplicationTables = database.prepare(
+    "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1"
+  ).get()
+  if (!hasApplicationTables) return
+  const databaseFile = (database.prepare('PRAGMA database_list').all() as unknown as Array<{
+    name: string
+    file: string
+  }>).find(({ name }) => name === 'main')?.file
+  if (!databaseFile) return
+  const backupPath = `${databaseFile}.pre-v3.bak`
+  if (existsSync(backupPath)) return
+  database.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`)
+}
+
 /**
  * Migrates both the original unversioned database and current databases in one
  * transaction. File-system reconciliation intentionally belongs to the F1
@@ -37,6 +54,7 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
   if (versionRow.user_version > APPLICATION_SCHEMA_VERSION) {
     throw new Error(`Database schema ${versionRow.user_version} is newer than this application`)
   }
+  preservePreV3Backup(database, versionRow.user_version)
   database.exec('PRAGMA foreign_keys = ON; BEGIN IMMEDIATE;')
   try {
     database.exec(`
@@ -112,6 +130,32 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
       'background_source',
       "TEXT NOT NULL DEFAULT 'original' CHECK (background_source IN ('original', 'local'))"
     )
+    addColumnIfMissing(database, 'generations', generationColumns, 'batch_id', 'TEXT')
+    addColumnIfMissing(
+      database,
+      'generations',
+      generationColumns,
+      'selection_ordinal',
+      'INTEGER CHECK (selection_ordinal IS NULL OR selection_ordinal BETWEEN 1 AND 9)'
+    )
+    addColumnIfMissing(
+      database,
+      'generations',
+      generationColumns,
+      'asset_source',
+      "TEXT CHECK (asset_source IS NULL OR asset_source IN ('user', 'starter_pack'))"
+    )
+    addColumnIfMissing(database, 'generations', generationColumns, 'pack_id', 'TEXT')
+    addColumnIfMissing(database, 'generations', generationColumns, 'pack_version', 'TEXT')
+    addColumnIfMissing(database, 'generations', generationColumns, 'pack_asset_key', 'TEXT')
+
+    database.exec(`
+      UPDATE generations
+      SET asset_source = 'user'
+      WHERE background_source = 'local'
+        AND local_asset_id IS NOT NULL
+        AND asset_source IS NULL;
+    `)
 
     database.exec(`
       CREATE TABLE IF NOT EXISTS local_assets (
@@ -230,6 +274,22 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
       );
       CREATE INDEX IF NOT EXISTS idx_local_import_item_tags_item_ordinal
         ON local_import_item_tags(item_id, ordinal ASC);
+
+      CREATE TABLE IF NOT EXISTS starter_pack_asset_state (
+        pack_id TEXT NOT NULL CHECK (
+          length(pack_id) BETWEEN 1 AND 80
+            AND pack_id = lower(pack_id)
+            AND pack_id NOT GLOB '*[^a-z0-9-]*'
+        ),
+        pack_asset_key TEXT NOT NULL CHECK (
+          length(pack_asset_key) BETWEEN 1 AND 80
+            AND pack_asset_key = upper(pack_asset_key)
+            AND pack_asset_key NOT GLOB '*[^A-Z0-9-]*'
+        ),
+        disabled_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (pack_id, pack_asset_key)
+      );
 
       CREATE INDEX IF NOT EXISTS idx_generations_created_at
         ON generations(created_at DESC);
@@ -362,6 +422,54 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
       BEGIN
         SELECT RAISE(ABORT, 'finalized import tags are immutable');
       END;
+      CREATE TRIGGER IF NOT EXISTS trg_generations_source_snapshot_insert
+      BEFORE INSERT ON generations
+      WHEN (
+        NEW.background_source = 'original' AND (
+          NEW.asset_source IS NOT NULL OR NEW.local_asset_id IS NOT NULL OR
+          NEW.local_asset_name_snapshot IS NOT NULL OR NEW.local_match_mode IS NOT NULL OR
+          NEW.pack_id IS NOT NULL OR NEW.pack_version IS NOT NULL OR NEW.pack_asset_key IS NOT NULL
+        )
+      ) OR (
+        NEW.background_source = 'local' AND (
+          NEW.asset_source IS NULL OR NEW.local_asset_id IS NULL OR
+          NEW.local_asset_name_snapshot IS NULL OR NEW.local_match_mode IS NULL OR
+          (NEW.asset_source = 'user' AND (
+            NEW.pack_id IS NOT NULL OR NEW.pack_version IS NOT NULL OR NEW.pack_asset_key IS NOT NULL
+          )) OR
+          (NEW.asset_source = 'starter_pack' AND (
+            NEW.pack_id IS NULL OR NEW.pack_version IS NULL OR NEW.pack_asset_key IS NULL
+          ))
+        )
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'generation source snapshot is inconsistent');
+      END;
+      CREATE TRIGGER IF NOT EXISTS trg_generations_source_snapshot_update
+      BEFORE UPDATE OF background_source, asset_source, local_asset_id,
+        local_asset_name_snapshot, local_match_mode, pack_id, pack_version, pack_asset_key
+      ON generations
+      WHEN (
+        NEW.background_source = 'original' AND (
+          NEW.asset_source IS NOT NULL OR NEW.local_asset_id IS NOT NULL OR
+          NEW.local_asset_name_snapshot IS NOT NULL OR NEW.local_match_mode IS NOT NULL OR
+          NEW.pack_id IS NOT NULL OR NEW.pack_version IS NOT NULL OR NEW.pack_asset_key IS NOT NULL
+        )
+      ) OR (
+        NEW.background_source = 'local' AND (
+          NEW.asset_source IS NULL OR NEW.local_asset_id IS NULL OR
+          NEW.local_asset_name_snapshot IS NULL OR NEW.local_match_mode IS NULL OR
+          (NEW.asset_source = 'user' AND (
+            NEW.pack_id IS NOT NULL OR NEW.pack_version IS NOT NULL OR NEW.pack_asset_key IS NOT NULL
+          )) OR
+          (NEW.asset_source = 'starter_pack' AND (
+            NEW.pack_id IS NULL OR NEW.pack_version IS NULL OR NEW.pack_asset_key IS NULL
+          ))
+        )
+      )
+      BEGIN
+        SELECT RAISE(ABORT, 'generation source snapshot is inconsistent');
+      END;
     `)
 
     const invalidAssetPath = database.prepare(`
@@ -395,8 +503,33 @@ export function migrateApplicationDatabase(database: DatabaseSync): void {
       HAVING COUNT(*) > 12 OR MIN(ordinal) < 0 OR MAX(ordinal) > 11
       LIMIT 1
     `).get()
-    if (invalidAssetPath || invalidStagingPath || invalidReadyAsset || invalidAssetTag) {
-      throw new Error('Existing local asset data violates schema v2 ownership or tag constraints')
+    const invalidGenerationSnapshot = database.prepare(`
+      SELECT 1 FROM generations
+      WHERE (
+        background_source = 'original' AND (
+          asset_source IS NOT NULL OR local_asset_id IS NOT NULL OR
+          local_asset_name_snapshot IS NOT NULL OR local_match_mode IS NOT NULL OR
+          pack_id IS NOT NULL OR pack_version IS NOT NULL OR pack_asset_key IS NOT NULL
+        )
+      ) OR (
+        background_source = 'local' AND (
+          asset_source IS NULL OR local_asset_id IS NULL OR
+          local_asset_name_snapshot IS NULL OR local_match_mode IS NULL OR
+          (asset_source = 'user' AND (
+            pack_id IS NOT NULL OR pack_version IS NOT NULL OR pack_asset_key IS NOT NULL
+          )) OR
+          (asset_source = 'starter_pack' AND (
+            pack_id IS NULL OR pack_version IS NULL OR pack_asset_key IS NULL
+          ))
+        )
+      )
+      LIMIT 1
+    `).get()
+    if (
+      invalidAssetPath || invalidStagingPath || invalidReadyAsset ||
+      invalidAssetTag || invalidGenerationSnapshot
+    ) {
+      throw new Error('Existing data violates schema v3 ownership or source snapshot constraints')
     }
 
     database.exec(`PRAGMA user_version = ${APPLICATION_SCHEMA_VERSION}`)

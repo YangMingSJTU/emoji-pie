@@ -1,3 +1,6 @@
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import {
@@ -12,6 +15,107 @@ function tableNames(database: DatabaseSync): string[] {
 }
 
 describe('application database migration', () => {
+  it('preserves an immutable pre-v3 database backup before a file migration', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'emoji-pie-v3-backup-'))
+    const databasePath = join(directory, 'emoji-pie.sqlite')
+    const backupPath = `${databasePath}.pre-v3.bak`
+    const oldDatabase = new DatabaseSync(databasePath)
+    oldDatabase.exec(`
+      CREATE TABLE generations (
+        id TEXT PRIMARY KEY,
+        prompt TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        style TEXT NOT NULL,
+        layout TEXT NOT NULL DEFAULT 'poster',
+        embed_caption INTEGER NOT NULL DEFAULT 1,
+        emotion TEXT NOT NULL,
+        caption TEXT NOT NULL,
+        seed INTEGER NOT NULL,
+        image BLOB NOT NULL,
+        favorite INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        local_asset_id TEXT,
+        local_asset_name_snapshot TEXT,
+        local_match_mode TEXT,
+        background_source TEXT NOT NULL DEFAULT 'original'
+      );
+      INSERT INTO generations (
+        id, prompt, mode, style, emotion, caption, seed, image, created_at
+      ) VALUES ('before-v3', '旧记录', 'express', 'office', 'tired', '旧记录', 1,
+        X'01', '2026-07-17T00:00:00.000Z');
+      PRAGMA user_version = 2;
+    `)
+    oldDatabase.close()
+
+    const upgraded = new DatabaseSync(databasePath)
+    migrateApplicationDatabase(upgraded)
+    upgraded.close()
+
+    expect(existsSync(backupPath)).toBe(true)
+    const backup = new DatabaseSync(backupPath, { readOnly: true })
+    expect(backup.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
+    expect(backup.prepare(
+      "SELECT id FROM generations WHERE id = 'before-v3'"
+    ).get()).toEqual({ id: 'before-v3' })
+    backup.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  it('migrates v2 history to v3 source snapshots without changing rendered output', () => {
+    const database = new DatabaseSync(':memory:')
+    database.exec(`
+      CREATE TABLE generations (
+        id TEXT PRIMARY KEY,
+        prompt TEXT NOT NULL,
+        mode TEXT NOT NULL,
+        style TEXT NOT NULL,
+        layout TEXT NOT NULL DEFAULT 'poster',
+        embed_caption INTEGER NOT NULL DEFAULT 1,
+        emotion TEXT NOT NULL,
+        caption TEXT NOT NULL,
+        seed INTEGER NOT NULL,
+        image BLOB NOT NULL,
+        favorite INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        local_asset_id TEXT,
+        local_asset_name_snapshot TEXT,
+        local_match_mode TEXT,
+        background_source TEXT NOT NULL DEFAULT 'original'
+      );
+      INSERT INTO generations (
+        id, prompt, mode, style, emotion, caption, seed, image, favorite, created_at,
+        local_asset_id, local_asset_name_snapshot, local_match_mode, background_source
+      ) VALUES (
+        'v2-local', '加班', 'express', 'office', 'tired', '加班', 9, X'0102', 1,
+        '2026-07-17T00:00:00.000Z', '123e4567-e89b-42d3-a456-426614174000',
+        '素材 A', 'manual', 'local'
+      );
+      PRAGMA user_version = 2;
+    `)
+
+    migrateApplicationDatabase(database)
+
+    expect(database.prepare(`
+      SELECT id, image, favorite, asset_source, batch_id, selection_ordinal,
+        pack_id, pack_version, pack_asset_key
+      FROM generations WHERE id = 'v2-local'
+    `).get()).toEqual({
+      id: 'v2-local',
+      image: new Uint8Array([1, 2]),
+      favorite: 1,
+      asset_source: 'user',
+      batch_id: null,
+      selection_ordinal: null,
+      pack_id: null,
+      pack_version: null,
+      pack_asset_key: null
+    })
+    expect(database.prepare('PRAGMA user_version').get()).toEqual({
+      user_version: APPLICATION_SCHEMA_VERSION
+    })
+    database.close()
+  })
+
   it('versions an unversioned legacy database without changing historical generation data', () => {
     const database = new DatabaseSync(':memory:')
     database.exec(`
@@ -46,7 +150,8 @@ describe('application database migration', () => {
       'local_assets',
       'local_asset_tags',
       'local_import_sessions',
-      'local_import_items'
+      'local_import_items',
+      'starter_pack_asset_state'
     ]))
     expect(database.prepare(`
       SELECT id, favorite, layout, embed_caption, background_source,
@@ -131,9 +236,10 @@ describe('application database migration', () => {
     database.prepare(`
       INSERT INTO generations (
         id, prompt, mode, style, emotion, caption, seed, image, favorite, created_at,
-        local_asset_id, local_asset_name_snapshot, local_match_mode, background_source
+        local_asset_id, local_asset_name_snapshot, local_match_mode, background_source,
+        asset_source
       ) VALUES ('local-generation', '加班', 'express', 'office', 'tired', '加班', 1,
-        X'01', 1, '2026-07-17T00:00:00.000Z', ?, '素材 A', 'automatic', 'local')
+        X'01', 1, '2026-07-17T00:00:00.000Z', ?, '素材 A', 'automatic', 'local', 'user')
     `).run(assetId)
     database.prepare(`
       INSERT INTO local_import_sessions (

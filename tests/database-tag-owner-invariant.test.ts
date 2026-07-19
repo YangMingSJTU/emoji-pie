@@ -128,7 +128,7 @@ function createUpgradedV1Database(): DatabaseSync {
   `)
   seedAssets(database, false)
   migrateApplicationDatabase(database)
-  expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 2 })
+  expect(database.prepare('PRAGMA user_version').get()).toEqual({ user_version: 3 })
   return database
 }
 

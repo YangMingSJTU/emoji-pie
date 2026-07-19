@@ -48,6 +48,14 @@ function projectResult<T, U>(
 function projectAsset(asset: LocalAssetDto): LocalAssetDto {
   return {
     id: asset.id,
+    source: asset.source,
+    ...(asset.packId !== undefined ? { packId: asset.packId } : {}),
+    ...(asset.packVersion !== undefined ? { packVersion: asset.packVersion } : {}),
+    ...(asset.packAssetKey !== undefined ? { packAssetKey: asset.packAssetKey } : {}),
+    ...(asset.disabledAt !== undefined ? { disabledAt: asset.disabledAt } : {}),
+    contentState: asset.contentState,
+    canEdit: asset.canEdit,
+    canDelete: asset.canDelete,
     displayName: asset.displayName,
     originalFilename: asset.originalFilename,
     mimeType: asset.mimeType,

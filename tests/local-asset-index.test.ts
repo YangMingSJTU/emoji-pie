@@ -10,6 +10,10 @@ function asset(
 ): LocalAssetDto {
   return {
     id: `123e4567-e89b-42d3-a456-4266141740${idSuffix}`,
+    source: 'user',
+    contentState: 'ready',
+    canEdit: true,
+    canDelete: true,
     displayName,
     originalFilename: `${displayName}.png`,
     mimeType: 'image/png',

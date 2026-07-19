@@ -35,6 +35,10 @@ function corpusAsset(item: FrozenCorpusItem): LocalAssetDto {
   const importedAt = `2026-07-17T00:00:${suffix}.000Z`
   return {
     id: `123e4567-e89b-42d3-a456-4266141740${suffix}`,
+    source: 'user',
+    contentState: 'ready',
+    canEdit: true,
+    canDelete: true,
     displayName: `冻结语料素材 ${suffix}`,
     originalFilename: `frozen-${suffix}.png`,
     mimeType: 'image/png',

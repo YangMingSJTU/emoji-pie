@@ -7,8 +7,11 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
+    "predev": "npm run starter-pack:build",
     "dev": "electron-vite dev",
     "dev:web": "vite --config vite.web.config.ts",
+    "starter-pack:build": "node scripts/build-starter-pack.mjs",
+    "prebuild": "npm run starter-pack:build",
     "assets:icon": "node scripts/generate-icon.mjs",
     "build": "npm run typecheck && electron-vite build",
     "package": "npm run build && electron-builder --dir",
@@ -38,6 +41,7 @@
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^6.1.0",
     "globals": "^16.4.0",
+    "js-yaml": "^5.2.1",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.44.1",
     "vite": "^7.1.7",
@@ -53,6 +57,15 @@
       "out/**/*",
       "src/main/local-asset-worker-process.cjs",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".generated/starter-packs/starter-pack-v1",
+        "to": "starter-packs/starter-pack-v1",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "icon": "assets/icon.png",
     "win": {

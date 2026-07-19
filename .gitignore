@@ -1,6 +1,7 @@
 node_modules/
 out/
 release/
+.generated/
 coverage/
 playwright-report/
 test-results/

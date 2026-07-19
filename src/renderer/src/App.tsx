@@ -385,6 +385,7 @@ export default function App(): React.JSX.Element {
               assetId: candidate.assetId,
               assetNameSnapshot: candidate.assetNameSnapshot,
               matchMode: request.local!.matchMode,
+              assetSource: 'user',
               sourceDeleted: false
             }
           }))

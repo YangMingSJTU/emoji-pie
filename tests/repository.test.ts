@@ -105,6 +105,7 @@ describe('emoji render settings', () => {
         assetId: '123E4567-E89B-42D3-A456-426614174000',
         assetNameSnapshot: '素材 A',
         matchMode: 'automatic',
+        assetSource: 'user',
         sourceDeleted: false
       }
     }
@@ -117,6 +118,7 @@ describe('emoji render settings', () => {
           assetId: '123e4567-e89b-42d3-a456-426614174000',
           assetNameSnapshot: '素材 A',
           matchMode: 'automatic',
+          assetSource: 'user',
           sourceDeleted: true
         }
       })

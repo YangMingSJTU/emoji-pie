@@ -1,4 +1,5 @@
 import type { LocalAssetApi } from './local-assets'
+import type { AssetSource } from './starter-packs'
 
 export type GenerationMode = 'express' | 'reply'
 
@@ -64,6 +65,12 @@ export interface LocalGenerationSourceSnapshot {
   assetId: string
   assetNameSnapshot: string
   matchMode: 'automatic' | 'manual'
+  assetSource: AssetSource
+  batchId?: string
+  selectionOrdinal?: number
+  packId?: string
+  packVersion?: string
+  packAssetKey?: string
   sourceDeleted: boolean
 }
 

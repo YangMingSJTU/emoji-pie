@@ -60,6 +60,21 @@ function isEmojiRecord(record: unknown): record is EmojiRecord {
     countGraphemes(candidate.localSource.assetNameSnapshot.trim()) <= 60 &&
     (candidate.localSource.matchMode === 'automatic' ||
       candidate.localSource.matchMode === 'manual') &&
+    (candidate.localSource.assetSource === 'user' ||
+      candidate.localSource.assetSource === 'starter_pack') &&
+    (candidate.localSource.batchId === undefined ||
+      normalizeLocalAssetId(candidate.localSource.batchId) !== undefined) &&
+    (candidate.localSource.selectionOrdinal === undefined ||
+      (Number.isInteger(candidate.localSource.selectionOrdinal) &&
+        candidate.localSource.selectionOrdinal >= 1 &&
+        candidate.localSource.selectionOrdinal <= 9)) &&
+    (candidate.localSource.assetSource === 'user'
+      ? candidate.localSource.packId === undefined &&
+        candidate.localSource.packVersion === undefined &&
+        candidate.localSource.packAssetKey === undefined
+      : typeof candidate.localSource.packId === 'string' &&
+        typeof candidate.localSource.packVersion === 'string' &&
+        typeof candidate.localSource.packAssetKey === 'string') &&
     typeof candidate.localSource.sourceDeleted === 'boolean'
   )
   return (

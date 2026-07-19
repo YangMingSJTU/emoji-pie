@@ -1,0 +1,48 @@
+schema_version: 1
+pack_id: starter-pack-v1
+authorship: EmojiPie design team
+reference_images: []
+third_party_assets: []
+subject: an original small rounded lilac rice-dumpling-shaped mascot named Tuantuan, wearing a short teal scarf, coral blush, tiny charcoal limbs, and asymmetric dot eyes
+style: polished soft 3D clay illustration, tactile rounded forms, clean editorial lighting, subtle contact shadows, restrained lilac-teal-coral palette, expressive body language
+background: warm cream studio environment with minimal abstract props and no real-world branding
+global_negative_prompt: no text, letters, numbers, punctuation, logos, watermark, recognizable public figure, brand product, copyrighted character, third-party reference, or yellow-face emoji design
+format: square 1:1, clear silhouette, generous safe margins, no important content near edges
+
+prompts:
+  - { id: SPV1-001, title: 欢呼彩带, scene: joyfully jumping with both arms raised and surrounded by soft abstract confetti shapes }
+  - { id: SPV1-002, title: 举杯获胜, scene: standing on a tiny cream podium and lifting a simple unbranded cup-shaped award with soft abstract starbursts }
+  - { id: SPV1-003, title: 胜利舞步, scene: doing an exuberant victory dance with curved rhythm ribbons and small paper confetti }
+  - { id: SPV1-004, title: 独自淋雨, scene: sitting beneath one small personal rain cloud with a plain closed umbrella and tiny puddle }
+  - { id: SPV1-005, title: 抱着纸巾, scene: curled up beside a soft tissue box and holding one tissue with oversized clay tears }
+  - { id: SPV1-006, title: 花也蔫了, scene: kneeling beside a tiny wilted clay flower in a pot with lowered shoulders and one tear }
+  - { id: SPV1-007, title: 气到冒烟, scene: standing stiffly with clenched fists while two soft clay steam puffs rise beside the head }
+  - { id: SPV1-008, title: 怒气乱线, scene: stomping under a floating tangled coral clay scribble cloud with abstract accent marks }
+  - { id: SPV1-009, title: 捶软枕头, scene: harmlessly venting frustration by punching a large soft coral pillow }
+  - { id: SPV1-010, title: 迷路地图, scene: comparing a completely blank folded map with diverging paths in a smooth cream maze; confusion conveyed only through pose and setting; every visible surface blank; no symbols }
+  - { id: SPV1-011, title: 箭头打结, scene: looking at three colorful curved abstract direction shapes that loop and tangle without labels }
+  - { id: SPV1-012, title: 无字路牌, scene: standing between three blank unlettered signpost boards pointing different ways }
+  - { id: SPV1-013, title: 当场震惊, scene: recoiling beneath a soft abstract lightning shape with scarf lifted by the moment }
+  - { id: SPV1-014, title: 杯子都掉了, scene: freezing in surprise as a plain unbranded empty clay mug slips safely from one hand }
+  - { id: SPV1-015, title: 盒中惊喜, scene: jumping backward as a plain gift box opens with abstract stars and ribbons }
+  - { id: SPV1-016, title: 无话可说, scene: staring forward with a simple horizontal clay zipper shape across the mouth area }
+  - { id: SPV1-017, title: 呆住三秒, scene: sitting motionless on a stool with a blank stare and three plain floating clay dots nearby }
+  - { id: SPV1-018, title: 原地冻住, scene: humorously frozen halfway inside a pale-blue translucent-looking clay ice cube }
+  - { id: SPV1-019, title: 认真点头, scene: nodding firmly with one tiny fist near the chest and subtle motion arcs }
+  - { id: SPV1-020, title: 确认完成, scene: placing a small mint-green check-shaped clay token onto a plain round board }
+  - { id: SPV1-021, title: 愉快握手, scene: two original Tuantuan mascots shaking hands warmly }
+  - { id: SPV1-022, title: 明确拒绝, scene: holding both open palms forward in a clear friendly stop gesture }
+  - { id: SPV1-023, title: 抱臂摇头, scene: crossing tiny arms and turning the head aside with a firm skeptical expression }
+  - { id: SPV1-024, title: 挡住这口锅, scene: standing behind a plain rounded coral shield while pushing away a small gray cooking pot }
+  - { id: SPV1-025, title: 送上谢礼, scene: offering a small plainly wrapped gift box with a teal ribbon toward the viewer }
+  - { id: SPV1-026, title: 比心感谢, scene: forming a simple heart shape with tiny hands while small coral hearts float nearby }
+  - { id: SPV1-027, title: 递上花束, scene: holding out a bouquet of abstract clay flowers with no identifiable species }
+  - { id: SPV1-028, title: 认真鞠躬, scene: making a sincere polite bow with hands together and scarf hanging forward }
+  - { id: SPV1-029, title: 补好裂缝, scene: carefully repairing a small cracked clay pot with a visible golden seam }
+  - { id: SPV1-030, title: 双手递信, scene: offering a plain sealed envelope with no writing using both hands }
+  - { id: SPV1-031, title: 沙漏等待, scene: sitting beside a large simple clay hourglass and watching one grain fall }
+  - { id: SPV1-032, title: 盯着时钟, scene: tapping one foot while pointing at a plain round clock face with tick marks but no numerals }
+  - { id: SPV1-033, title: 门口等你, scene: peeking around a simple rounded doorway while holding a tiny unbranded bell }
+  - { id: SPV1-034, title: 趴在工位, scene: slumped face-down on a small desk beside a plain closed laptop and papers }
+  - { id: SPV1-035, title: 咖啡续命, scene: hugging an oversized plain coffee mug with drooping eyelids beside a low-battery-shaped clay icon }
+  - { id: SPV1-036, title: 文件堆成山, scene: nearly buried behind two leaning stacks of blank paper sheets and reaching one tiny arm out }

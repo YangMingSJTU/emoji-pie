@@ -526,6 +526,10 @@ export class LocalAssetRepository {
   private mapStoredAsset(row: AssetRow): StoredLocalAsset {
     return {
       id: row.id,
+      source: 'user',
+      contentState: 'ready',
+      canEdit: true,
+      canDelete: true,
       displayName: row.display_name,
       originalFilename: row.original_filename,
       mimeType: row.mime_type,
@@ -548,6 +552,10 @@ export class LocalAssetRepository {
   private projectAsset(asset: StoredLocalAsset): LocalAssetDto {
     return {
       id: asset.id,
+      source: asset.source,
+      contentState: asset.contentState,
+      canEdit: asset.canEdit,
+      canDelete: asset.canDelete,
       displayName: asset.displayName,
       originalFilename: asset.originalFilename,
       mimeType: asset.mimeType,

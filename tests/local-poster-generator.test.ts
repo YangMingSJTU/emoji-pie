@@ -61,6 +61,10 @@ async function createFixture(count: number): Promise<{
     ])
     const asset: StoredLocalAsset = {
       id,
+      source: 'user',
+      contentState: 'ready',
+      canEdit: true,
+      canDelete: true,
       displayName: `加班素材 ${index}`,
       originalFilename: `${index}.png`,
       mimeType: 'image/png',
